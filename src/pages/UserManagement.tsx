@@ -8,7 +8,7 @@ import type { UserRole } from '../lib/roles';
 import { useRefetchOnFocus } from '../hooks/useRefetchOnFocus';
 
 const emptyForm = { email: '', nombre: '', apellido: '' };
-const emptyEditForm = { nombre: '', apellido: '', email: '', isActive: true };
+const emptyEditForm = { nombre: '', apellido: '', email: '', isActive: true, role: USER_ROLES.EMPLEADO as UserRole };
 
 export function UserManagement() {
   const { darkMode } = useDarkMode();
@@ -60,7 +60,7 @@ export function UserManagement() {
 
   const openEdit = (user: BackendUserData) => {
     setEditingUser(user);
-    setEditForm({ nombre: user.nombre, apellido: user.apellido, email: user.email, isActive: user.isActive });
+    setEditForm({ nombre: user.nombre, apellido: user.apellido, email: user.email, isActive: user.isActive, role: user.role });
     setEditError(null);
   };
 
@@ -84,6 +84,9 @@ export function UserManagement() {
       });
       if (editForm.isActive !== editingUser.isActive) {
         await api.toggleUserActive(editingUser.id_usuario, editForm.isActive);
+      }
+      if (editForm.role !== editingUser.role) {
+        await api.assignRole(editForm.email, editForm.role);
       }
       closeEdit();
       await loadUsers();
@@ -383,6 +386,19 @@ export function UserManagement() {
                 onChange={(e) => setEditForm({ ...editForm, apellido: e.target.value })}
                 className={inputClass}
               />
+
+              <div>
+                <label className={`block text-sm mb-1 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Rol</label>
+                <select
+                  value={editForm.role}
+                  onChange={(e) => setEditForm({ ...editForm, role: e.target.value as UserRole })}
+                  className={inputClass}
+                >
+                  {Object.values(USER_ROLES).map((r) => (
+                    <option key={r} value={r}>{ROLE_LABELS[r]}</option>
+                  ))}
+                </select>
+              </div>
 
               <label className={`flex items-center gap-2 text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
                 <input

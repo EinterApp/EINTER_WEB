@@ -41,14 +41,6 @@ const mapOdooProduct = (item: Record<string, unknown>): Product => ({
   standard_tarima: item.inventario_standar_tarima != null ? Number(item.inventario_standar_tarima) : null,
   cajas_x_tarima: item.cajas_x_tarima != null ? Number(item.cajas_x_tarima) : null,
   no_estiba: item.no_estiba != null ? Number(item.no_estiba) : null,
-  pronostico_1_fecha: item.pronostico_1_fecha != null ? String(item.pronostico_1_fecha) : null,
-  pronostico_1_valor: item.pronostico_1_valor != null ? Number(item.pronostico_1_valor) : null,
-  pronostico_2_fecha: item.pronostico_2_fecha != null ? String(item.pronostico_2_fecha) : null,
-  pronostico_2_valor: item.pronostico_2_valor != null ? Number(item.pronostico_2_valor) : null,
-  pronostico_3_fecha: item.pronostico_3_fecha != null ? String(item.pronostico_3_fecha) : null,
-  pronostico_3_valor: item.pronostico_3_valor != null ? Number(item.pronostico_3_valor) : null,
-  pronostico_4_fecha: item.pronostico_4_fecha != null ? String(item.pronostico_4_fecha) : null,
-  pronostico_4_valor: item.pronostico_4_valor != null ? Number(item.pronostico_4_valor) : null,
   considerar_modelo_matematico: item.considerar_modelo_matematico !== undefined ? Boolean(item.considerar_modelo_matematico) : true,
   updated_at: item.updated_at ? String(item.updated_at) : null,
 });
@@ -147,14 +139,6 @@ export function Productos() {
         "Piezas por Tarima": p.standard_tarima ?? "",
         "Cajas por Tarima": p.cajas_x_tarima ?? "",
         "No. de Estiba": p.no_estiba ?? "",
-        "Futuro Lunes 1 (fecha)": p.pronostico_1_fecha ?? "",
-        "Futuro Lunes 1 (inventario)": p.pronostico_1_valor ?? "",
-        "Futuro Lunes 2 (fecha)": p.pronostico_2_fecha ?? "",
-        "Futuro Lunes 2 (inventario)": p.pronostico_2_valor ?? "",
-        "Futuro Lunes 3 (fecha)": p.pronostico_3_fecha ?? "",
-        "Futuro Lunes 3 (inventario)": p.pronostico_3_valor ?? "",
-        "Futuro Lunes 4 (fecha)": p.pronostico_4_fecha ?? "",
-        "Futuro Lunes 4 (inventario)": p.pronostico_4_valor ?? "",
         "Modelo Matemático": p.considerar_modelo_matematico === false ? "No" : "Sí",
         "Última actualización": p.updated_at ?? "",
       }));
@@ -461,22 +445,6 @@ export function Productos() {
         apiData.no_estiba = productData.no_estiba;
       if (productData.category !== undefined)
         apiData.id_categoria = productData.category ? parseInt(String(productData.category)) : null;
-      if (productData.pronostico_1_fecha !== undefined)
-        apiData.pronostico_1_fecha = productData.pronostico_1_fecha;
-      if (productData.pronostico_1_valor !== undefined)
-        apiData.pronostico_1_valor = productData.pronostico_1_valor;
-      if (productData.pronostico_2_fecha !== undefined)
-        apiData.pronostico_2_fecha = productData.pronostico_2_fecha;
-      if (productData.pronostico_2_valor !== undefined)
-        apiData.pronostico_2_valor = productData.pronostico_2_valor;
-      if (productData.pronostico_3_fecha !== undefined)
-        apiData.pronostico_3_fecha = productData.pronostico_3_fecha;
-      if (productData.pronostico_3_valor !== undefined)
-        apiData.pronostico_3_valor = productData.pronostico_3_valor;
-      if (productData.pronostico_4_fecha !== undefined)
-        apiData.pronostico_4_fecha = productData.pronostico_4_fecha;
-      if (productData.pronostico_4_valor !== undefined)
-        apiData.pronostico_4_valor = productData.pronostico_4_valor;
       if (productData.considerar_modelo_matematico !== undefined)
         apiData.considerar_modelo_matematico = productData.considerar_modelo_matematico;
       if (productData.updated_at)

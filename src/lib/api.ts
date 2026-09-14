@@ -154,6 +154,11 @@ export const api = {
   deleteUser: (id: number | string) => apiRequest(`/api/auth/users/${id}`, {
     method: 'DELETE'
   }),
+  assignRole: (email: string, role: UserRole) =>
+    apiRequest('/api/auth/assign-role', {
+      method: 'POST',
+      body: JSON.stringify({ email, role })
+    }),
 
   // Dashboard
   getDashboard: () => apiRequest('/api/misc/dashboard'),

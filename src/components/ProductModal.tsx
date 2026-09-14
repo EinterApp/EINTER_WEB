@@ -20,8 +20,6 @@ interface FormData {
   category_id: string;
   supplier_id: string;
   description: string;
-  price: string;
-  cost: string;
   stock: string;
   weight_kg: string;
   qty_per_carton: string;
@@ -31,14 +29,6 @@ interface FormData {
   alto: string;
   ancho: string;
   largo: string;
-  pronostico_1_fecha: string;
-  pronostico_1_valor: string;
-  pronostico_2_fecha: string;
-  pronostico_2_valor: string;
-  pronostico_3_fecha: string;
-  pronostico_3_valor: string;
-  pronostico_4_fecha: string;
-  pronostico_4_valor: string;
   considerar_modelo_matematico: boolean;
   photoUri?: string;
   photoBase64?: string;
@@ -52,8 +42,6 @@ const initialFormData: FormData = {
   category_id: "",
   supplier_id: "",
   description: "",
-  price: "",
-  cost: "",
   stock: "",
   weight_kg: "",
   qty_per_carton: "",
@@ -63,26 +51,11 @@ const initialFormData: FormData = {
   alto: "",
   ancho: "",
   largo: "",
-  pronostico_1_fecha: "",
-  pronostico_1_valor: "",
-  pronostico_2_fecha: "",
-  pronostico_2_valor: "",
-  pronostico_3_fecha: "",
-  pronostico_3_valor: "",
-  pronostico_4_fecha: "",
-  pronostico_4_valor: "",
   considerar_modelo_matematico: true,
   photoUri: undefined,
   photoBase64: undefined,
   updated_at: undefined,
 };
-
-// Normaliza a "YYYY-MM-DD" para <input type="date">, sin importar si la API
-// devuelve un DATE plano o un timestamp con hora.
-function toDateInputValue(value?: string | null): string {
-  if (!value) return "";
-  return value.slice(0, 10);
-}
 
 export function ProductModal({
   visible,
@@ -123,8 +96,6 @@ export function ProductModal({
         category_id: categoryId,
         supplier_id: String(product.supplier?.id || ""),
         description: product.description || "",
-        price: String(product.price || ""),
-        cost: String(product.cost || ""),
         stock: String(product.stock || ""),
         weight_kg: String(product.weight_kg || ""),
         qty_per_carton: product.qty_per_carton != null ? String(product.qty_per_carton) : "",
@@ -134,14 +105,6 @@ export function ProductModal({
         largo: String(product.dimensions_cm?.largo || ""),
         ancho: String(product.dimensions_cm?.ancho || ""),
         alto: String(product.dimensions_cm?.alto || ""),
-        pronostico_1_fecha: toDateInputValue(product.pronostico_1_fecha),
-        pronostico_1_valor: product.pronostico_1_valor != null ? String(product.pronostico_1_valor) : "",
-        pronostico_2_fecha: toDateInputValue(product.pronostico_2_fecha),
-        pronostico_2_valor: product.pronostico_2_valor != null ? String(product.pronostico_2_valor) : "",
-        pronostico_3_fecha: toDateInputValue(product.pronostico_3_fecha),
-        pronostico_3_valor: product.pronostico_3_valor != null ? String(product.pronostico_3_valor) : "",
-        pronostico_4_fecha: toDateInputValue(product.pronostico_4_fecha),
-        pronostico_4_valor: product.pronostico_4_valor != null ? String(product.pronostico_4_valor) : "",
         considerar_modelo_matematico: product.considerar_modelo_matematico ?? true,
         photoUri: product.photo || undefined,
         updated_at: product.updated_at,
@@ -280,8 +243,6 @@ export function ProductModal({
         china_sku: formData.china_sku.trim() ? formData.china_sku.trim() : null,
         name: formData.name,
         category: formData.category_id,
-        price: parseFloat(formData.price) || 0,
-        cost: parseFloat(formData.cost) || 0,
         stock: parseFloat(formData.stock) || 0,
         weight_kg: parseFloat(formData.weight_kg) || 0,
         dimensions_cm: {
@@ -305,14 +266,6 @@ export function ProductModal({
         standard_tarima: formData.standard_tarima !== "" ? parseFloat(formData.standard_tarima) : null,
         cajas_x_tarima: formData.cajas_x_tarima !== "" ? parseFloat(formData.cajas_x_tarima) : null,
         no_estiba: formData.no_estiba !== "" ? parseFloat(formData.no_estiba) : null,
-        pronostico_1_fecha: formData.pronostico_1_fecha !== "" ? formData.pronostico_1_fecha : null,
-        pronostico_1_valor: formData.pronostico_1_valor !== "" ? parseFloat(formData.pronostico_1_valor) : null,
-        pronostico_2_fecha: formData.pronostico_2_fecha !== "" ? formData.pronostico_2_fecha : null,
-        pronostico_2_valor: formData.pronostico_2_valor !== "" ? parseFloat(formData.pronostico_2_valor) : null,
-        pronostico_3_fecha: formData.pronostico_3_fecha !== "" ? formData.pronostico_3_fecha : null,
-        pronostico_3_valor: formData.pronostico_3_valor !== "" ? parseFloat(formData.pronostico_3_valor) : null,
-        pronostico_4_fecha: formData.pronostico_4_fecha !== "" ? formData.pronostico_4_fecha : null,
-        pronostico_4_valor: formData.pronostico_4_valor !== "" ? parseFloat(formData.pronostico_4_valor) : null,
         considerar_modelo_matematico: formData.considerar_modelo_matematico,
       };
 
@@ -426,37 +379,6 @@ export function ProductModal({
                   <option key={s.id} value={String(s.id)}>{s.name}</option>
                 ))}
               </select>
-            </div>
-          </div>
-
-          <div className="flex flex-row gap-4 mb-4">
-            <div className="flex-1">
-              <label className="text-sm font-robotoMedium text-gray-700 dark:text-gray-300 mb-2 block">
-                Precio
-              </label>
-              <input
-                type="number"
-                value={formData.price}
-                onChange={(e) =>
-                  setFormData({ ...formData, price: e.target.value })
-                }
-                placeholder="0.00"
-                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 dark:text-white"
-              />
-            </div>
-            <div className="flex-1">
-              <label className="text-sm font-robotoMedium text-gray-700 dark:text-gray-300 mb-2 block">
-                Costo
-              </label>
-              <input
-                type="number"
-                value={formData.cost}
-                onChange={(e) =>
-                  setFormData({ ...formData, cost: e.target.value })
-                }
-                placeholder="0.00"
-                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 dark:text-white"
-              />
             </div>
           </div>
 
@@ -591,49 +513,6 @@ export function ProductModal({
                 placeholder="Cajas apilables en altura"
                 className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 dark:text-white"
               />
-            </div>
-          </div>
-
-          <div className="mb-6 p-4 border border-gray-200 dark:border-gray-700 rounded-lg">
-            <label className="text-sm font-robotoMedium text-gray-700 dark:text-gray-300 mb-3 block">
-              Pronósticos de inventario a futuro
-            </label>
-            <div className="grid grid-cols-2 gap-4">
-              {([1, 2, 3, 4] as const).map((n) => {
-                const fechaKey = `pronostico_${n}_fecha` as const;
-                const valorKey = `pronostico_${n}_valor` as const;
-                return (
-                  <div key={n} className="flex flex-row gap-2">
-                    <div className="flex-1">
-                      <label className="text-xs text-gray-600 dark:text-gray-400 mb-1 block">
-                        Futuro Lunes {n} · fecha
-                      </label>
-                      <input
-                        type="date"
-                        value={formData[fechaKey]}
-                        onChange={(e) =>
-                          setFormData({ ...formData, [fechaKey]: e.target.value })
-                        }
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 dark:text-white text-sm"
-                      />
-                    </div>
-                    <div className="w-28">
-                      <label className="text-xs text-gray-600 dark:text-gray-400 mb-1 block">
-                        Inventario
-                      </label>
-                      <input
-                        type="number"
-                        value={formData[valorKey]}
-                        onChange={(e) =>
-                          setFormData({ ...formData, [valorKey]: e.target.value })
-                        }
-                        placeholder="0"
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 dark:text-white text-sm"
-                      />
-                    </div>
-                  </div>
-                );
-              })}
             </div>
           </div>
 

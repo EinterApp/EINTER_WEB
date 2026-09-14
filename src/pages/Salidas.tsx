@@ -4,8 +4,11 @@ import { useDarkMode } from "../context/DarkModeContext";
 import { fetchAPI } from "../lib/fetch";
 import { useRefetchOnFocus } from "../hooks/useRefetchOnFocus";
 import { getMonterreyYear } from "../lib/dateMx";
+import { useRole } from "../hooks/useRole";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
+
+type EstadoOrden = "draft" | "confirmado";
 
 interface SalidaFolio {
   numero_folio: string;
@@ -16,6 +19,8 @@ interface SalidaFolio {
   tarimas: number | null;
   total_piezas: number;
   num_productos: number;
+  estado?: EstadoOrden;
+  veces_rechazado?: number;
 }
 
 interface SalidaProducto {
@@ -335,10 +340,12 @@ function SalidaFormModal({
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const { isSuperAdmin } = useRole();
   const [form, setForm] = useState<SalidaFormData>(initial);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [articulos, setArticulos] = useState<ArticuloAC[]>([]);
+  const [reviewEstado, setReviewEstado] = useState<EstadoOrden | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -363,21 +370,32 @@ function SalidaFormModal({
       ),
     }));
 
-  const handleSubmit = async () => {
+  const validateForm = (): boolean => {
     setFormError(null);
-    if (!form.numero_folio.trim()) { setFormError("El número de folio es requerido."); return; }
-    if (!form.anio || isNaN(Number(form.anio))) { setFormError("El año es requerido."); return; }
+    if (!form.numero_folio.trim()) { setFormError("El número de folio es requerido."); return false; }
+    if (!form.anio || isNaN(Number(form.anio))) { setFormError("El año es requerido."); return false; }
 
     const validProductos = form.productos.filter((p) => p.master_sku.trim() !== "");
-    if (validProductos.length === 0) { setFormError("Agrega al menos un producto con Modelo."); return; }
+    if (validProductos.length === 0) { setFormError("Agrega al menos un producto con Modelo."); return false; }
     for (const p of validProductos) {
       const cant = Number(p.cantidad);
       if (!Number.isInteger(cant) || cant <= 0) {
         setFormError(`La cantidad del modelo "${p.master_sku}" debe ser un entero mayor a 0.`);
-        return;
+        return false;
       }
     }
+    return true;
+  };
 
+  const handleReviewClick = (estado: EstadoOrden) => {
+    if (!validateForm()) return;
+    setReviewEstado(estado);
+  };
+
+  const handleSubmit = async (estado: EstadoOrden) => {
+    if (!validateForm()) return;
+
+    const validProductos = form.productos.filter((p) => p.master_sku.trim() !== "");
     const payload = {
       numero_folio: form.numero_folio.trim(),
       fecha_orden:  form.fecha_orden  || null,
@@ -385,6 +403,7 @@ function SalidaFormModal({
       anio:         Number(form.anio),
       categoria:    "baños",
       tarimas:      null,
+      estado,
       productos:    validProductos.map((p) => ({
         master_sku:  p.master_sku.trim(),
         sku_thd:     p.sku_thd.trim() || null,
@@ -403,9 +422,11 @@ function SalidaFormModal({
           body: JSON.stringify(payload),
         });
       }
+      setReviewEstado(null);
       onSaved();
     } catch (err: unknown) {
       setFormError((err as Error).message);
+      setReviewEstado(null);
     } finally {
       setSaving(false);
     }
@@ -548,17 +569,86 @@ function SalidaFormModal({
           >
             Cancelar
           </button>
+          {!isSuperAdmin && (
+            <button
+              onClick={() => handleReviewClick("draft")}
+              disabled={saving}
+              className="px-4 py-2 rounded-lg border border-blue-600 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 text-sm transition-colors disabled:opacity-50"
+            >
+              Guardar (borrador)
+            </button>
+          )}
           <button
-            onClick={handleSubmit}
+            onClick={() => handleReviewClick("confirmado")}
             disabled={saving}
             className="px-6 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm transition-colors disabled:opacity-50 flex items-center gap-2"
           >
             {saving ? (
               <><span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />Guardando…</>
-            ) : mode === "create" ? "Crear Salida" : "Guardar cambios"}
+            ) : (isSuperAdmin ? "Guardar" : "Confirmar")}
           </button>
         </div>
       </div>
+
+      {/* Review popup (read-only, "¿Estás seguro/a?") */}
+      {reviewEstado && (
+        <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-4" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-white dark:bg-gray-800 rounded-xl w-full max-w-md shadow-2xl">
+            <div className="px-6 py-5">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                {reviewEstado === "confirmado" ? "Confirmar salida" : "Guardar como borrador"}
+              </h2>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                Revisa la información antes de continuar. Esta vista no es editable.
+              </p>
+              <div className="mt-4 space-y-2 text-sm bg-gray-50 dark:bg-gray-900/40 rounded-lg p-4">
+                <div className="flex justify-between">
+                  <span className="text-gray-500 dark:text-gray-400">Folio</span>
+                  <span className="font-medium text-gray-900 dark:text-white">{form.numero_folio}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500 dark:text-gray-400">Año</span>
+                  <span className="font-medium text-gray-900 dark:text-white">{form.anio}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500 dark:text-gray-400">Fecha salida</span>
+                  <span className="font-medium text-gray-900 dark:text-white">{form.fecha_salida || "-"}</span>
+                </div>
+                <div className="border-t border-gray-200 dark:border-gray-700 pt-2 mt-2">
+                  <span className="text-gray-500 dark:text-gray-400 block mb-1">Productos</span>
+                  <ul className="space-y-0.5">
+                    {form.productos.filter((p) => p.master_sku.trim()).map((p) => (
+                      <li key={p.id} className="flex justify-between text-gray-800 dark:text-gray-200">
+                        <span className="font-mono">{p.master_sku}</span>
+                        <span>{p.cantidad}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mt-4">¿Estás seguro/a?</p>
+            </div>
+            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-200 dark:border-gray-700">
+              <button
+                onClick={() => setReviewEstado(null)}
+                disabled={saving}
+                className="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 text-sm disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => handleSubmit(reviewEstado)}
+                disabled={saving}
+                className="px-6 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm disabled:opacity-50 flex items-center gap-2"
+              >
+                {saving ? (
+                  <><span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />Guardando…</>
+                ) : "Confirmar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -567,6 +657,7 @@ function SalidaFormModal({
 
 export function Salidas() {
   useDarkMode();
+  const { isSuperAdmin } = useRole();
 
   const [salidas, setSalidas] = useState<SalidaFolio[]>([]);
   const [loading, setLoading] = useState(false);
@@ -591,6 +682,9 @@ export function Salidas() {
   const [deleteFolio, setDeleteFolio] = useState<SalidaFolio | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  const [confirmandoFolio, setConfirmandoFolio] = useState<string | null>(null);
+  const [botandoFolio, setBotandoFolio] = useState<string | null>(null);
 
   const fetchSalidas = useCallback(async () => {
     setLoading(true);
@@ -654,6 +748,30 @@ export function Salidas() {
     });
     setFormMode("edit");
     setFormVisible(true);
+  };
+
+  const handleConfirmarSalida = async (folio: string) => {
+    setConfirmandoFolio(folio);
+    try {
+      await fetchAPI(`/api/thd/salidas/${encodeURIComponent(folio)}/confirmar`, { method: "PATCH" });
+      fetchSalidas();
+    } catch {
+      /* toast pattern not present in this page; silently retry via table refresh */
+    } finally {
+      setConfirmandoFolio(null);
+    }
+  };
+
+  const handleBotarSalida = async (folio: string) => {
+    setBotandoFolio(folio);
+    try {
+      await fetchAPI(`/api/thd/salidas/${encodeURIComponent(folio)}/botar`, { method: "PATCH" });
+      fetchSalidas();
+    } catch {
+      /* ignore */
+    } finally {
+      setBotandoFolio(null);
+    }
   };
 
   const handleDelete = async () => {
@@ -789,20 +907,59 @@ export function Salidas() {
                     {s.total_piezas.toLocaleString("es-MX")}
                   </div>
                   <div className="py-3 px-2 flex items-center justify-center gap-1">
-                    <button
-                      onClick={() => handleOpenEdit(s)}
-                      className="inline-flex items-center justify-center w-7 h-7 rounded text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors text-sm"
-                      title="Editar folio"
-                    >
-                      ✏️
-                    </button>
-                    <button
-                      onClick={() => { setDeleteError(null); setDeleteFolio(s); }}
-                      className="inline-flex items-center justify-center w-7 h-7 rounded text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors text-sm"
-                      title="Eliminar folio"
-                    >
-                      🗑️
-                    </button>
+                    {isSuperAdmin ? (
+                      <>
+                        {s.estado === "confirmado" && (
+                          <button
+                            onClick={() => handleBotarSalida(s.numero_folio)}
+                            disabled={botandoFolio === s.numero_folio}
+                            className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 text-xs font-medium hover:bg-red-200 dark:hover:bg-red-900/60 transition-colors disabled:opacity-50"
+                            title="Botar salida (regresa a borrador)"
+                          >
+                            {botandoFolio === s.numero_folio ? "…" : "⛔ Botar"}
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleOpenEdit(s)}
+                          className="inline-flex items-center justify-center w-7 h-7 rounded text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors text-sm"
+                          title={`Editar folio — botada ${s.veces_rechazado ?? 0} veces`}
+                        >
+                          ✏️
+                        </button>
+                        {(s.veces_rechazado ?? 0) > 0 && (
+                          <span className="text-[10px] text-red-500 dark:text-red-400 font-semibold" title="Veces botada">
+                            ×{s.veces_rechazado}
+                          </span>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        {s.estado === "draft" && (
+                          <button
+                            onClick={() => handleConfirmarSalida(s.numero_folio)}
+                            disabled={confirmandoFolio === s.numero_folio}
+                            className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 text-xs font-medium hover:bg-green-200 dark:hover:bg-green-900/60 transition-colors disabled:opacity-50"
+                            title="Confirmar salida"
+                          >
+                            {confirmandoFolio === s.numero_folio ? "…" : "✓ Confirmar"}
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleOpenEdit(s)}
+                          className="inline-flex items-center justify-center w-7 h-7 rounded text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors text-sm"
+                          title="Editar folio"
+                        >
+                          ✏️
+                        </button>
+                        <button
+                          onClick={() => { setDeleteError(null); setDeleteFolio(s); }}
+                          className="inline-flex items-center justify-center w-7 h-7 rounded text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors text-sm"
+                          title="Eliminar folio"
+                        >
+                          🗑️
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
               ))

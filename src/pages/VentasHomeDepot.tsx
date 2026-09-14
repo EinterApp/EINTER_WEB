@@ -13,6 +13,8 @@ interface Semana {
 interface VentaSemana {
   id: number;
   cantidad: number;
+  precio: number;
+  precioHD: number;
   importe: number;
 }
 
@@ -71,6 +73,8 @@ interface CeldaEditada {
   sku: string;
   descripcion: string;
   cantidad: number;
+  precio: number;
+  precioHD: number;
   importe: number;
 }
 
@@ -82,19 +86,23 @@ interface EditModalProps {
 
 function EditModal({ celda, onClose, onSave }: EditModalProps) {
   const [cantidad, setCantidad] = useState(String(celda.cantidad));
-  const [importe, setImporte] = useState(String(celda.importe));
+  const [precio, setPrecio] = useState(String(celda.precio || ""));
+  const [precioHD, setPrecioHD] = useState(String(celda.precioHD || ""));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const importe = (Number(cantidad) || 0) * (Number(precio) || 0);
+
   const handleSave = async () => {
     const c = Number(cantidad);
-    const i = Number(importe);
+    const p = Number(precio) || 0;
+    const pHD = Number(precioHD) || 0;
     if (isNaN(c) || c < 0) { setError("Cantidad inválida"); return; }
-    if (isNaN(i) || i < 0) { setError("Importe inválido"); return; }
+    if (p < 0 || pHD < 0) { setError("Precio inválido"); return; }
     setSaving(true);
     setError(null);
     try {
-      await onSave({ ...celda, cantidad: c, importe: i });
+      await onSave({ ...celda, cantidad: c, precio: p, precioHD: pHD, importe: c * p });
       onClose();
     } catch (err) {
       setError((err as Error).message);
@@ -128,15 +136,39 @@ function EditModal({ celda, onClose, onSave }: EditModalProps) {
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Importe (MXN)
+              Precio (costo por unidad)
             </label>
             <input
               type="number"
               min="0"
               step="0.01"
-              value={importe}
-              onChange={(e) => setImporte(e.target.value)}
+              value={precio}
+              onChange={(e) => setPrecio(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Precio HD (a como lo vendió Home Depot por unidad)
+            </label>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={precioHD}
+              onChange={(e) => setPrecioHD(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Importe (MXN, automático)
+            </label>
+            <input
+              type="text"
+              readOnly
+              value={formatImporte(importe)}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-100 dark:bg-gray-900 text-gray-700 dark:text-gray-300 cursor-not-allowed"
             />
           </div>
         </div>
@@ -172,6 +204,8 @@ interface FilaVenta {
   sku: string;
   descripcion: string;
   cantidad: number;
+  precio: number;
+  precioHD: number;
   importe: number;
 }
 
@@ -191,33 +225,37 @@ function NuevaSemanaModal({ anio, semanas, productos, onClose, onSave }: NuevaSe
     semanas.length > 0 ? String(semanas[semanas.length - 1].semana_num) : ""
   );
   const [nuevaSemanaNum, setNuevaSemanaNum] = useState("");
-  // valores por MOD: { cantidad, importe } como strings de input
-  const [valores, setValores] = useState<Record<number, { cantidad: string; importe: string }>>({});
+  // valores por MOD: { cantidad, precio, precioHD } como strings de input; importe se deriva
+  const [valores, setValores] = useState<Record<number, { cantidad: string; precio: string; precioHD: string }>>({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const init: Record<number, { cantidad: string; importe: string }> = {};
+    const init: Record<number, { cantidad: string; precio: string; precioHD: string }> = {};
     const num = semanaMode === "existente" ? Number(semanaSeleccionada) : NaN;
     productos.forEach((p) => {
       const v = !isNaN(num) ? p.ventas[num] : undefined;
       init[p.mod] = {
         cantidad: v ? String(v.cantidad) : "",
-        importe: v ? String(v.importe) : "",
+        precio: v?.precio ? String(v.precio) : "",
+        precioHD: v?.precioHD ? String(v.precioHD) : "",
       };
     });
     setValores(init);
   }, [semanaMode, semanaSeleccionada, productos]);
 
-  const setCampo = (mod: number, campo: "cantidad" | "importe", valor: string) => {
+  const setCampo = (mod: number, campo: "cantidad" | "precio" | "precioHD", valor: string) => {
     setValores((prev) => ({ ...prev, [mod]: { ...prev[mod], [campo]: valor } }));
   };
 
+  const importeDe = (mod: number) =>
+    (Number(valores[mod]?.cantidad) || 0) * (Number(valores[mod]?.precio) || 0);
+
   // Resumen en vivo
   const totalPzas = productos.reduce((s, p) => s + (Number(valores[p.mod]?.cantidad) || 0), 0);
-  const totalImp = productos.reduce((s, p) => s + (Number(valores[p.mod]?.importe) || 0), 0);
+  const totalImp = productos.reduce((s, p) => s + importeDe(p.mod), 0);
   const conVenta = productos.filter(
-    (p) => (Number(valores[p.mod]?.cantidad) || 0) > 0 || (Number(valores[p.mod]?.importe) || 0) > 0
+    (p) => (Number(valores[p.mod]?.cantidad) || 0) > 0 || (Number(valores[p.mod]?.precio) || 0) > 0
   ).length;
 
   const handleSave = async () => {
@@ -242,13 +280,17 @@ function NuevaSemanaModal({ anio, semanas, productos, onClose, onSave }: NuevaSe
 
     const filas: FilaVenta[] = productos
       .map((p) => {
-        const v = valores[p.mod] ?? { cantidad: "", importe: "" };
+        const v = valores[p.mod] ?? { cantidad: "", precio: "", precioHD: "" };
         const c = Number(v.cantidad) || 0;
-        const i = Number(v.importe) || 0;
-        if (c < 0 || i < 0) return null;
-        return { mod: p.mod, sku: p.sku, descripcion: p.descripcion, cantidad: c, importe: i };
+        const precio = Number(v.precio) || 0;
+        const precioHD = Number(v.precioHD) || 0;
+        if (c < 0 || precio < 0 || precioHD < 0) return null;
+        return {
+          mod: p.mod, sku: p.sku, descripcion: p.descripcion,
+          cantidad: c, precio, precioHD, importe: c * precio,
+        };
       })
-      .filter((f): f is FilaVenta => f !== null && (f.cantidad > 0 || f.importe > 0));
+      .filter((f): f is FilaVenta => f !== null && (f.cantidad > 0 || f.precio > 0));
 
     if (filas.length === 0) { setError("Ingresa al menos una venta"); return; }
 
@@ -352,8 +394,10 @@ function NuevaSemanaModal({ anio, semanas, productos, onClose, onSave }: NuevaSe
                 <tr className="text-left text-xs text-gray-500 dark:text-gray-400">
                   <th className="px-4 py-2 font-medium">MOD</th>
                   <th className="px-4 py-2 font-medium">Descripción</th>
-                  <th className="px-4 py-2 font-medium w-32 text-center">Cantidad</th>
-                  <th className="px-4 py-2 font-medium w-36 text-center">Importe (MXN)</th>
+                  <th className="px-4 py-2 font-medium w-28 text-center">Cantidad</th>
+                  <th className="px-4 py-2 font-medium w-28 text-center">Precio</th>
+                  <th className="px-4 py-2 font-medium w-28 text-center">Precio HD</th>
+                  <th className="px-4 py-2 font-medium w-32 text-center">Importe (MXN)</th>
                 </tr>
               </thead>
               <tbody>
@@ -390,10 +434,24 @@ function NuevaSemanaModal({ anio, semanas, productos, onClose, onSave }: NuevaSe
                         min="0"
                         step="0.01"
                         placeholder="0.00"
-                        value={valores[p.mod]?.importe ?? ""}
-                        onChange={(e) => setCampo(p.mod, "importe", e.target.value)}
+                        value={valores[p.mod]?.precio ?? ""}
+                        onChange={(e) => setCampo(p.mod, "precio", e.target.value)}
                         className="w-full px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm text-right"
                       />
+                    </td>
+                    <td className="px-4 py-2 align-middle">
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        placeholder="0.00"
+                        value={valores[p.mod]?.precioHD ?? ""}
+                        onChange={(e) => setCampo(p.mod, "precioHD", e.target.value)}
+                        className="w-full px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm text-right"
+                      />
+                    </td>
+                    <td className="px-4 py-2 align-middle text-right text-xs text-gray-500 dark:text-gray-400">
+                      {formatImporte(importeDe(p.mod))}
                     </td>
                   </tr>
                 ))}
@@ -479,6 +537,8 @@ export function VentasHomeDepot() {
       sku: producto.sku,
       descripcion: producto.descripcion,
       cantidad: venta?.cantidad ?? 0,
+      precio: venta?.precio ?? 0,
+      precioHD: venta?.precioHD ?? 0,
       importe: venta?.importe ?? 0,
     });
   };
@@ -487,7 +547,9 @@ export function VentasHomeDepot() {
     if (celda.id) {
       await fetchAPI(`/api/ventas-hd/${celda.id}`, {
         method: "PUT",
-        body: JSON.stringify({ cantidad: celda.cantidad, importe: celda.importe }),
+        body: JSON.stringify({
+          cantidad: celda.cantidad, precio: celda.precio, precioHD: celda.precioHD, importe: celda.importe,
+        }),
       });
     } else {
       await fetchAPI("/api/ventas-hd", {
@@ -500,6 +562,8 @@ export function VentasHomeDepot() {
           sku: celda.sku,
           descripcion: celda.descripcion,
           cantidad: celda.cantidad,
+          precio: celda.precio,
+          precioHD: celda.precioHD,
           importe: celda.importe,
         }),
       });

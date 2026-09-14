@@ -100,14 +100,6 @@ export interface Product {
   standard_tarima?: number | null;
   cajas_x_tarima?: number | null;
   no_estiba?: number | null;
-  pronostico_1_fecha?: string | null;
-  pronostico_1_valor?: number | null;
-  pronostico_2_fecha?: string | null;
-  pronostico_2_valor?: number | null;
-  pronostico_3_fecha?: string | null;
-  pronostico_3_valor?: number | null;
-  pronostico_4_fecha?: string | null;
-  pronostico_4_valor?: number | null;
   considerar_modelo_matematico?: boolean;
   updated_at?: string | null;
 }

@@ -9,10 +9,12 @@ import { ColumnFilter, distinctValues } from "../components/ColumnFilter";
 import { SkuCombobox, type SkuOption } from "../components/SkuCombobox";
 import { ContenedorEtiquetaModal } from "../components/ContenedorEtiquetaModal";
 import { getMonterreyDateISO, getMonterreyYear } from "../lib/dateMx";
+import { useRole } from "../hooks/useRole";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type StatusEnvio = 'pendiente' | 'en_transito' | 'entregado' | 'cancelado';
+type EstadoOrden = 'draft' | 'confirmado';
 
 interface ContenedorRow {
   folio_orden: string;
@@ -26,6 +28,8 @@ interface ContenedorRow {
   pdf_filename?: string | null;
   pdf_uploaded_at?: string | null;
   status_envio?: StatusEnvio | null;
+  estado?: EstadoOrden | null;
+  veces_rechazado?: number;
   tamano?: string | null;
   // computed client-side from folio_orden
   orden: string;
@@ -47,6 +51,8 @@ interface ContenedorDetail {
   tamano?: string | null;
   fecha: string;
   fecha_pedido?: string | null;
+  importe_factura?: number | null;
+  importe_factura_moneda?: string | null;
   items: {
     id_movimiento: number;
     id_articulo: number;
@@ -177,6 +183,7 @@ function parseFolio(folio: string): { orden: string; contenedores: string } {
 
 export function Entradas() {
   useDarkMode();
+  const { isSuperAdmin } = useRole();
   const currentYear = String(getMonterreyYear());
 
   const [data, setData] = useState<ContenedorRow[]>([]);
@@ -216,6 +223,8 @@ export function Entradas() {
   const [createTamano, setCreateTamano] = useState("");
   const [createFecha, setCreateFecha] = useState(todayISO());
   const [createFechaPedido, setCreateFechaPedido] = useState("");
+  const [createImporteFactura, setCreateImporteFactura] = useState("");
+  const [createImporteFacturaMoneda, setCreateImporteFacturaMoneda] = useState("USD");
   const [createItems, setCreateItems] = useState<NuevoItem[]>([
     { master_sku: "", cantidad: "1" },
   ]);
@@ -225,6 +234,13 @@ export function Entradas() {
   // Delete confirmation state
   const [deleteFolio, setDeleteFolio] = useState<string | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+
+  // Review (guardar/confirmar) popup state
+  const [reviewEstado, setReviewEstado] = useState<EstadoOrden | null>(null);
+
+  // Botar loading state
+  const [botandoFolio, setBotandoFolio] = useState<string | null>(null);
+  const [confirmandoFolio, setConfirmandoFolio] = useState<string | null>(null);
 
   // SKU catalog for the create modal's searchable dropdown
   const [skuCatalog, setSkuCatalog] = useState<SkuOption[]>([]);
@@ -283,6 +299,8 @@ export function Entradas() {
                 ...r,
                 total_piezas: Number(r.total_piezas) || 0,
                 num_productos: Number(r.num_productos) || 0,
+                estado: r.estado ?? 'confirmado',
+                veces_rechazado: r.veces_rechazado ?? 0,
                 orden: parsed.orden,
                 contenedores: r.tamano || parsed.contenedores,
               };
@@ -401,6 +419,8 @@ export function Entradas() {
     setCreateTamano("");
     setCreateFecha(todayISO());
     setCreateFechaPedido("");
+    setCreateImporteFactura("");
+    setCreateImporteFacturaMoneda("USD");
     setCreateItems([{ master_sku: "", cantidad: "1" }]);
     setCreateError(null);
     setCreateVisible(true);
@@ -421,6 +441,8 @@ export function Entradas() {
       setCreateTamano(raw.tamano || "");
       setCreateFecha((raw.fecha || "").slice(0, 10) || todayISO());
       setCreateFechaPedido((raw.fecha_pedido || "").slice(0, 10));
+      setCreateImporteFactura(raw.importe_factura != null ? String(raw.importe_factura) : "");
+      setCreateImporteFacturaMoneda(raw.importe_factura_moneda || "USD");
       setCreateItems(
         raw.items.length > 0
           ? raw.items.map((it) => ({
@@ -470,8 +492,8 @@ export function Entradas() {
       prev.map((item, i) => (i === index ? { ...item, [field]: value } : item))
     );
 
-  const handleCreateSubmit = async () => {
-    if (!createFolio.trim() || !createFecha) return;
+  const validateCreateForm = (): { master_sku: string; cantidad: number }[] | null => {
+    if (!createFolio.trim() || !createFecha) return null;
     setCreateError(null);
 
     const validItems = createItems
@@ -483,7 +505,7 @@ export function Entradas() {
 
     if (validItems.length === 0) {
       setCreateError("Agrega al menos un producto.");
-      return;
+      return null;
     }
 
     if (knownSkus.size > 0) {
@@ -495,9 +517,23 @@ export function Entradas() {
           `MOD no encontrado: ${[...new Set(unknown)].join(", ")}. ` +
             "Selecciona un modelo de la lista."
         );
-        return;
+        return null;
       }
     }
+
+    return validItems;
+  };
+
+  // Opens the read-only review popup instead of saving directly.
+  const handleReviewClick = (estado: EstadoOrden) => {
+    const validItems = validateCreateForm();
+    if (!validItems) return;
+    setReviewEstado(estado);
+  };
+
+  const handleCreateSubmit = async (estado: EstadoOrden) => {
+    const validItems = validateCreateForm();
+    if (!validItems) return;
 
     setCreateLoading(true);
     try {
@@ -506,7 +542,10 @@ export function Entradas() {
         tamano: createTamano.trim() || null,
         fecha_movimiento: createFecha,
         fecha_pedido: createFechaPedido || null,
+        importe_factura: createImporteFactura.trim() || null,
+        importe_factura_moneda: createImporteFacturaMoneda,
         items: validItems,
+        estado,
       });
 
       if (editFolio) {
@@ -518,18 +557,48 @@ export function Entradas() {
         await fetchAPI("/api/contenedores", { method: "POST", body });
       }
 
+      setReviewEstado(null);
       setCreateVisible(false);
       setToast({
         ok: true,
         text: editFolio
           ? `Orden "${createFolio.trim()}" actualizada.`
-          : `Orden "${createFolio.trim()}" creada exitosamente.`,
+          : estado === "confirmado"
+          ? `Orden "${createFolio.trim()}" creada y confirmada.`
+          : `Orden "${createFolio.trim()}" guardada como borrador.`,
       });
       setRetryCount((c) => c + 1);
     } catch (err) {
       setCreateError((err as Error).message);
+      setReviewEstado(null);
     } finally {
       setCreateLoading(false);
+    }
+  };
+
+  const handleConfirmarOrden = async (folio: string) => {
+    setConfirmandoFolio(folio);
+    try {
+      await fetchAPI(`/api/contenedores/${encodeURIComponent(folio)}/confirmar`, { method: "PATCH" });
+      setToast({ ok: true, text: `Orden "${folio}" confirmada.` });
+      setRetryCount((c) => c + 1);
+    } catch (err) {
+      setToast({ ok: false, text: (err as Error).message });
+    } finally {
+      setConfirmandoFolio(null);
+    }
+  };
+
+  const handleBotarOrden = async (folio: string) => {
+    setBotandoFolio(folio);
+    try {
+      await fetchAPI(`/api/contenedores/${encodeURIComponent(folio)}/botar`, { method: "PATCH" });
+      setToast({ ok: true, text: `Orden "${folio}" botada de vuelta a borrador.` });
+      setRetryCount((c) => c + 1);
+    } catch (err) {
+      setToast({ ok: false, text: (err as Error).message });
+    } finally {
+      setBotandoFolio(null);
     }
   };
 
@@ -1043,26 +1112,74 @@ export function Entradas() {
                     className="py-3 px-2 flex items-center justify-center gap-1"
                     onClick={(e) => e.stopPropagation()}
                   >
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleOpenEdit(row.folio_orden);
-                      }}
-                      className="inline-flex items-center justify-center w-7 h-7 rounded text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors text-sm"
-                      title="Editar orden"
-                    >
-                      ✏️
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setDeleteFolio(row.folio_orden);
-                      }}
-                      className="inline-flex items-center justify-center w-7 h-7 rounded text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors text-sm"
-                      title="Eliminar orden"
-                    >
-                      🗑️
-                    </button>
+                    {isSuperAdmin ? (
+                      <>
+                        {row.estado === "confirmado" && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleBotarOrden(row.folio_orden);
+                            }}
+                            disabled={botandoFolio === row.folio_orden}
+                            className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 text-xs font-medium hover:bg-red-200 dark:hover:bg-red-900/60 transition-colors disabled:opacity-50"
+                            title="Botar orden (regresa a borrador)"
+                          >
+                            {botandoFolio === row.folio_orden ? "…" : "⛔ Botar"}
+                          </button>
+                        )}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleOpenEdit(row.folio_orden);
+                          }}
+                          className="inline-flex items-center justify-center w-7 h-7 rounded text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors text-sm"
+                          title={`Editar orden — botada ${row.veces_rechazado ?? 0} veces`}
+                        >
+                          ✏️
+                        </button>
+                        {(row.veces_rechazado ?? 0) > 0 && (
+                          <span className="text-[10px] text-red-500 dark:text-red-400 font-semibold" title="Veces botada">
+                            ×{row.veces_rechazado}
+                          </span>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        {row.estado === "draft" && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleConfirmarOrden(row.folio_orden);
+                            }}
+                            disabled={confirmandoFolio === row.folio_orden}
+                            className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 text-xs font-medium hover:bg-green-200 dark:hover:bg-green-900/60 transition-colors disabled:opacity-50"
+                            title="Confirmar orden"
+                          >
+                            {confirmandoFolio === row.folio_orden ? "…" : "✓ Confirmar"}
+                          </button>
+                        )}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleOpenEdit(row.folio_orden);
+                          }}
+                          className="inline-flex items-center justify-center w-7 h-7 rounded text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors text-sm"
+                          title="Editar orden"
+                        >
+                          ✏️
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDeleteFolio(row.folio_orden);
+                          }}
+                          className="inline-flex items-center justify-center w-7 h-7 rounded text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors text-sm"
+                          title="Eliminar orden"
+                        >
+                          🗑️
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
               ))
@@ -1290,7 +1407,7 @@ export function Entradas() {
                 {editFolio ? "Editar Orden" : "Nueva Orden"}
               </h2>
               <button
-                onClick={() => setCreateVisible(false)}
+                onClick={() => { setCreateVisible(false); setReviewEstado(null); }}
                 disabled={createLoading}
                 className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-xl leading-none disabled:opacity-50"
               >
@@ -1368,6 +1485,38 @@ export function Entradas() {
                 </div>
               </div>
 
+              {/* Importe de factura */}
+              <div className="grid grid-cols-[1fr_8rem] gap-4">
+                <div>
+                  <label className="block text-sm font-robotoMedium text-gray-700 dark:text-gray-300 mb-1.5">
+                    Importe de factura
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={createImporteFactura}
+                    onChange={(e) => setCreateImporteFactura(e.target.value)}
+                    placeholder="0.00"
+                    className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-robotoMedium text-gray-700 dark:text-gray-300 mb-1.5">
+                    Moneda
+                  </label>
+                  <select
+                    value={createImporteFacturaMoneda}
+                    onChange={(e) => setCreateImporteFacturaMoneda(e.target.value)}
+                    className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+                  >
+                    <option value="USD">USD</option>
+                    <option value="MXN">MXN</option>
+                    <option value="CNY">CNY</option>
+                  </select>
+                </div>
+              </div>
+
               {/* Items */}
               <div>
                 <label className="block text-sm font-robotoMedium text-gray-700 dark:text-gray-300 mb-2">
@@ -1438,14 +1587,25 @@ export function Entradas() {
             {/* Footer */}
             <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-200 dark:border-gray-700">
               <button
-                onClick={() => setCreateVisible(false)}
+                onClick={() => { setCreateVisible(false); setReviewEstado(null); }}
                 disabled={createLoading}
                 className="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-sm font-robotoMedium disabled:opacity-50"
               >
                 Cancelar
               </button>
+              {!isSuperAdmin && (
+                <button
+                  onClick={() => handleReviewClick("draft")}
+                  disabled={
+                    createLoading || !createFolio.trim() || !createFecha
+                  }
+                  className="px-6 py-2 rounded-lg border border-blue-600 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 text-sm font-robotoMedium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Guardar (borrador)
+                </button>
+              )}
               <button
-                onClick={handleCreateSubmit}
+                onClick={() => handleReviewClick("confirmado")}
                 disabled={
                   createLoading || !createFolio.trim() || !createFecha
                 }
@@ -1457,7 +1617,86 @@ export function Entradas() {
                     Guardando…
                   </>
                 ) : (
-                  "Guardar"
+                  isSuperAdmin ? "Guardar" : "Confirmar"
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Review popup (read-only, "¿Estás seguro/a?") ────────────────────── */}
+      {reviewEstado && (
+        <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-xl w-full max-w-md shadow-2xl">
+            <div className="px-6 py-5">
+              <h2 className="text-lg font-robotoMedium text-gray-900 dark:text-white">
+                {reviewEstado === "confirmado" ? "Confirmar orden" : "Guardar como borrador"}
+              </h2>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                Revisa la información antes de continuar. Esta vista no es editable.
+              </p>
+              <div className="mt-4 space-y-2 text-sm bg-gray-50 dark:bg-gray-900/40 rounded-lg p-4">
+                <div className="flex justify-between">
+                  <span className="text-gray-500 dark:text-gray-400">Orden</span>
+                  <span className="font-medium text-gray-900 dark:text-white">{createFolio}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500 dark:text-gray-400">Contenedores</span>
+                  <span className="font-medium text-gray-900 dark:text-white">{createTamano || "-"}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500 dark:text-gray-400">Fecha de llegada</span>
+                  <span className="font-medium text-gray-900 dark:text-white">{createFecha}</span>
+                </div>
+                {createFechaPedido && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-500 dark:text-gray-400">Fecha de pedido</span>
+                    <span className="font-medium text-gray-900 dark:text-white">{createFechaPedido}</span>
+                  </div>
+                )}
+                {createImporteFactura && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-500 dark:text-gray-400">Importe de factura</span>
+                    <span className="font-medium text-gray-900 dark:text-white">
+                      {createImporteFacturaMoneda} {Number(createImporteFactura).toLocaleString("es-MX")}
+                    </span>
+                  </div>
+                )}
+                <div className="border-t border-gray-200 dark:border-gray-700 pt-2 mt-2">
+                  <span className="text-gray-500 dark:text-gray-400 block mb-1">Productos</span>
+                  <ul className="space-y-0.5">
+                    {createItems.filter((i) => i.master_sku.trim()).map((i, idx) => (
+                      <li key={idx} className="flex justify-between text-gray-800 dark:text-gray-200">
+                        <span className="font-mono">{i.master_sku}</span>
+                        <span>{i.cantidad}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mt-4">¿Estás seguro/a?</p>
+            </div>
+            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-200 dark:border-gray-700">
+              <button
+                onClick={() => setReviewEstado(null)}
+                disabled={createLoading}
+                className="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-sm font-robotoMedium disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => handleCreateSubmit(reviewEstado)}
+                disabled={createLoading}
+                className="px-6 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-robotoMedium transition-colors disabled:opacity-50 flex items-center gap-2"
+              >
+                {createLoading ? (
+                  <>
+                    <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Guardando…
+                  </>
+                ) : (
+                  "Confirmar"
                 )}
               </button>
             </div>
