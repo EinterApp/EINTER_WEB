@@ -158,6 +158,10 @@ type SortCol = keyof ComparativoRow;
 type OrdenSortCol = keyof OrdenRow;
 type SortDir = "asc" | "desc";
 
+function formatPct(pct: number, _status: string) {
+  return `${pct.toFixed(1)}%`;
+}
+
 function pctTextColor(pct: number) {
   if (pct >= 100) return "text-green-600 dark:text-green-400";
   if (pct >= 50) return "text-amber-600 dark:text-amber-400";
@@ -469,7 +473,7 @@ function OrdenModal({ orden, onClose, modalData, modalLoading, modalError }: Ord
             <p className="text-xs font-medium uppercase tracking-wide mb-1 opacity-75">
               % Cumplimiento
             </p>
-            <p className="text-xl font-bold">{orden.pct_cumplimiento.toFixed(1)}%</p>
+            <p className="text-xl font-bold">{formatPct(orden.pct_cumplimiento, orden.status)}</p>
           </div>
         </div>
 
@@ -587,7 +591,7 @@ function OrdenModal({ orden, onClose, modalData, modalLoading, modalError }: Ord
                       <div className="py-3 px-3 border-r border-gray-200 dark:border-gray-600 flex items-center justify-center">
                         <div className="flex flex-col items-center gap-1 w-full px-1">
                           <span className={`text-sm font-bold ${pctTextColor(row.pct_cumplimiento)}`}>
-                            {row.pct_cumplimiento.toFixed(1)}%
+                            {formatPct(row.pct_cumplimiento, row.status)}
                           </span>
                           <div className="w-full h-1.5 bg-gray-200 dark:bg-gray-600 rounded-full overflow-hidden">
                             <div
@@ -1442,7 +1446,7 @@ export function THDComparativo() {
                           <span
                             className={`text-sm font-bold ${pctTextColor(row.pct_cumplimiento)}`}
                           >
-                            {row.pct_cumplimiento.toFixed(1)}%
+                            {formatPct(row.pct_cumplimiento, row.status)}
                           </span>
                           <div className="w-full h-1.5 bg-gray-200 dark:bg-gray-600 rounded-full overflow-hidden">
                             <div
@@ -1574,7 +1578,7 @@ export function THDComparativo() {
                         <span
                           className={`text-sm font-bold ${ordenPctTextColor(row.pct_cumplimiento)}`}
                         >
-                          {row.pct_cumplimiento.toFixed(1)}%
+                          {formatPct(row.pct_cumplimiento, row.status)}
                         </span>
                         <div className="w-full h-1.5 bg-gray-200 dark:bg-gray-600 rounded-full overflow-hidden">
                           <div
@@ -1698,7 +1702,7 @@ export function THDComparativo() {
                         </div>
                         <div className="py-3 px-3 border-r border-gray-200 dark:border-gray-600 flex items-center justify-center">
                           <span className={`text-sm font-bold ${pctTextColor(row.pct_cumplimiento)}`}>
-                            {row.pct_cumplimiento.toFixed(1)}%
+                            {formatPct(row.pct_cumplimiento, row.status)}
                           </span>
                         </div>
                         <div className="py-3 px-3 flex items-center justify-center">
