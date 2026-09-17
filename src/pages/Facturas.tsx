@@ -51,6 +51,12 @@ interface PagoDetalle {
   importe_factura_moneda: string;
 }
 
+interface ResumenAnio {
+  total_usd: number;
+  tasa_ponderada: number;
+  total_mxn: number;
+}
+
 function formatDate(iso: string) {
   if (!iso) return "-";
   const d = new Date(iso);
@@ -76,7 +82,14 @@ export function Facturas() {
   const [ordenDetalleLoading, setOrdenDetalleLoading] = useState(false);
 
   const [saldoOrden, setSaldoOrden] = useState<OrdenRow | null>(null);
-  const [showSaldoGlobal, setShowSaldoGlobal] = useState(false);
+
+  const [resumenAnio, setResumenAnio] = useState<ResumenAnio | null>(null);
+
+  const [importeFolio, setImporteFolio] = useState<string | null>(null);
+  const [importeValor, setImporteValor] = useState("");
+  const [importeMoneda, setImporteMoneda] = useState<"USD" | "MXN">("USD");
+  const [importeSaving, setImporteSaving] = useState(false);
+  const [importeError, setImporteError] = useState<string | null>(null);
 
   const [pagoFolio, setPagoFolio] = useState<string | null>(null);
   const [pagoDetalle, setPagoDetalle] = useState<PagoDetalle | null>(null);
@@ -102,8 +115,9 @@ export function Facturas() {
     Promise.all([
       fetchAPI("/api/contenedores?page=1&limit=100000"),
       fetchAPI("/api/facturas"),
+      fetchAPI("/api/facturas/resumen/ultimo-anio"),
     ])
-      .then(([contenedoresRaw, pagadosRaw]) => {
+      .then(([contenedoresRaw, pagadosRaw, resumenRaw]) => {
         if (cancelled) return;
         setOrdenes((contenedoresRaw as { data: OrdenRow[] }).data ?? []);
         const map: Record<string, PagadoRow> = {};
@@ -111,6 +125,12 @@ export function Facturas() {
           map[p.folio_orden] = { ...p, pagado: Number(p.pagado), pagado_mxn: Number(p.pagado_mxn) };
         }
         setPagados(map);
+        const r = resumenRaw as ResumenAnio;
+        setResumenAnio({
+          total_usd: Number(r.total_usd),
+          tasa_ponderada: Number(r.tasa_ponderada),
+          total_mxn: Number(r.total_mxn),
+        });
       })
       .catch((err) => { if (!cancelled) setError((err as Error).message); })
       .finally(() => { if (!cancelled) setLoading(false); });
@@ -217,16 +237,32 @@ export function Facturas() {
     }
   };
 
-  const ordenesConSaldo = ordenes
-    .filter((o) => o.importe_factura != null && o.importe_factura_moneda === "USD")
-    .map((o) => ({
-      orden: o,
-      saldo: Math.max(0, (o.importe_factura as number) - (pagados[o.folio_orden]?.pagado ?? 0)),
-    }))
-    .filter((x) => x.saldo > 0)
-    .sort((a, b) => b.saldo - a.saldo);
+  const openRegistrarImporte = (folio: string) => {
+    setImporteFolio(folio);
+    setImporteValor("");
+    setImporteMoneda("USD");
+    setImporteError(null);
+  };
 
-  const saldoTotalUsd = ordenesConSaldo.reduce((s, x) => s + x.saldo, 0);
+  const handleRegistrarImporte = async () => {
+    if (!importeFolio) return;
+    if (!importeValor || Number(importeValor) <= 0) { setImporteError("Importe inválido"); return; }
+    setImporteSaving(true);
+    setImporteError(null);
+    try {
+      await fetchAPI(`/api/facturas/${encodeURIComponent(importeFolio)}/importe`, {
+        method: "PUT",
+        body: JSON.stringify({ importe_factura: Number(importeValor), importe_factura_moneda: importeMoneda }),
+      });
+      setImporteFolio(null);
+      setReload((c) => c + 1);
+      setToast({ ok: true, text: "Importe registrado" });
+    } catch (err) {
+      setImporteError((err as Error).message);
+    } finally {
+      setImporteSaving(false);
+    }
+  };
 
   return (
     <div className="w-full bg-gray-50 dark:bg-gray-900 flex flex-col min-h-screen">
@@ -238,16 +274,26 @@ export function Facturas() {
           </p>
         </div>
 
-        <button
-          onClick={() => setShowSaldoGlobal(true)}
-          className="text-right rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/40 px-5 py-3 hover:bg-gray-100 dark:hover:bg-gray-900/70 transition-colors"
-        >
-          <p className="text-xs text-gray-500 dark:text-gray-400">Saldo pendiente (USD)</p>
-          <p className="text-2xl font-bold text-gray-900 dark:text-white">
-            {formatMoney(saldoTotalUsd, "USD")}
-          </p>
-          <p className="text-[11px] text-blue-600 dark:text-blue-400 mt-0.5">Ver transacciones →</p>
-        </button>
+        <div className="flex gap-3 flex-wrap">
+          <div className="text-right rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/40 px-5 py-3">
+            <p className="text-xs text-gray-500 dark:text-gray-400">Dólares comprados (últ. año móvil)</p>
+            <p className="text-2xl font-bold text-gray-900 dark:text-white">
+              {resumenAnio ? formatMoney(resumenAnio.total_usd, "USD") : "…"}
+            </p>
+          </div>
+          <div className="text-right rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/40 px-5 py-3">
+            <p className="text-xs text-gray-500 dark:text-gray-400">Tasa ponderada (últ. año móvil)</p>
+            <p className="text-2xl font-bold text-gray-900 dark:text-white">
+              {resumenAnio ? resumenAnio.tasa_ponderada.toFixed(4) : "…"}
+            </p>
+          </div>
+          <div className="text-right rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/40 px-5 py-3">
+            <p className="text-xs text-gray-500 dark:text-gray-400">Equivalente en pesos (últ. año móvil)</p>
+            <p className="text-2xl font-bold text-gray-900 dark:text-white">
+              {resumenAnio ? formatMoney(resumenAnio.total_mxn, "MXN") : "…"}
+            </p>
+          </div>
+        </div>
       </div>
 
       <div className="flex-1 bg-white dark:bg-gray-800 mx-8 mt-4 mb-8 border border-gray-400 dark:border-gray-700 overflow-hidden flex flex-col rounded-lg">
@@ -326,7 +372,12 @@ export function Facturas() {
                         {formatMoney(orden.importe_factura, orden.importe_factura_moneda)}
                       </button>
                     ) : (
-                      <span className="text-gray-400 dark:text-gray-500 font-normal">-</span>
+                      <button
+                        onClick={() => openRegistrarImporte(orden.folio_orden)}
+                        className="text-xs px-2 py-1 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                      >
+                        + Registrar importe
+                      </button>
                     )}
                   </div>
                   <div className="py-4 px-4 border-r border-gray-200 dark:border-gray-600 flex items-center justify-center">
@@ -415,32 +466,37 @@ export function Facturas() {
         </div>
       )}
 
-      {/* Saldo global (esquina superior derecha) */}
-      {showSaldoGlobal && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setShowSaldoGlobal(false)}>
-          <div className="bg-white dark:bg-gray-800 rounded-xl w-full max-w-md shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-              <div>
-                <h2 className="text-lg font-medium text-gray-900 dark:text-white">Saldo pendiente (USD)</h2>
-                <p className="text-xl font-bold text-gray-900 dark:text-white">{formatMoney(saldoTotalUsd, "USD")}</p>
+      {/* Registrar importe modal */}
+      {importeFolio && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setImporteFolio(null)}>
+          <div className="bg-white dark:bg-gray-800 rounded-xl w-full max-w-sm shadow-2xl p-6" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-lg font-medium text-gray-900 dark:text-white mb-1">Registrar importe</h2>
+            <p className="text-xs text-gray-500 dark:text-gray-400 font-mono mb-4">{importeFolio}</p>
+            {importeError && <p className="text-sm text-red-500 mb-2">{importeError}</p>}
+            <div className="grid grid-cols-3 gap-3">
+              <div className="col-span-2">
+                <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Importe</label>
+                <input type="number" min="0" step="0.01" value={importeValor} onChange={(e) => setImporteValor(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm" />
               </div>
-              <button onClick={() => setShowSaldoGlobal(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-xl leading-none">✕</button>
+              <div>
+                <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Moneda</label>
+                <select value={importeMoneda} onChange={(e) => setImporteMoneda(e.target.value as "USD" | "MXN")}
+                  className="w-full px-2 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm">
+                  <option value="USD">USD</option>
+                  <option value="MXN">MXN</option>
+                </select>
+              </div>
             </div>
-            <div className="max-h-80 overflow-auto">
-              {ordenesConSaldo.length === 0 ? (
-                <p className="text-sm text-gray-400 dark:text-gray-500 p-6 text-center">Sin saldos pendientes en USD.</p>
-              ) : (
-                ordenesConSaldo.map(({ orden, saldo }) => (
-                  <button
-                    key={orden.folio_orden}
-                    onClick={() => { setShowSaldoGlobal(false); openPago(orden.folio_orden); }}
-                    className="w-full flex items-center justify-between px-6 py-3 border-b border-gray-100 dark:border-gray-700 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors text-left"
-                  >
-                    <span className="font-mono text-sm text-gray-700 dark:text-gray-300">{orden.folio_orden}</span>
-                    <span className="text-sm font-semibold text-gray-900 dark:text-white">{formatMoney(saldo, "USD")}</span>
-                  </button>
-                ))
-              )}
+            <div className="flex gap-2 mt-5">
+              <button onClick={() => setImporteFolio(null)}
+                className="flex-1 px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 text-sm">
+                Cancelar
+              </button>
+              <button onClick={handleRegistrarImporte} disabled={importeSaving}
+                className="flex-1 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium disabled:opacity-50">
+                {importeSaving ? "Guardando…" : "Guardar"}
+              </button>
             </div>
           </div>
         </div>

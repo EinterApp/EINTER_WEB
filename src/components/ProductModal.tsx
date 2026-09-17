@@ -17,6 +17,7 @@ interface FormData {
   sku: string;
   china_sku: string;
   name: string;
+  estado: "activo" | "inactivo" | "special_buy";
   category_id: string;
   supplier_id: string;
   description: string;
@@ -39,6 +40,7 @@ const initialFormData: FormData = {
   sku: "",
   china_sku: "",
   name: "",
+  estado: "activo",
   category_id: "",
   supplier_id: "",
   description: "",
@@ -93,6 +95,7 @@ export function ProductModal({
         sku: String(product.sku || ""),
         china_sku: product.china_sku || "",
         name: product.name || "",
+        estado: product.estado ?? "activo",
         category_id: categoryId,
         supplier_id: String(product.supplier?.id || ""),
         description: product.description || "",
@@ -242,6 +245,7 @@ export function ProductModal({
         sku: formData.sku,
         china_sku: formData.china_sku.trim() ? formData.china_sku.trim() : null,
         name: formData.name,
+        estado: formData.estado,
         category: formData.category_id,
         stock: parseFloat(formData.stock) || 0,
         weight_kg: parseFloat(formData.weight_kg) || 0,
@@ -344,6 +348,33 @@ export function ProductModal({
                 placeholder="Nombre del producto"
                 className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 dark:text-white"
               />
+            </div>
+          </div>
+
+          <div className="flex flex-row gap-4 mb-4">
+            <div className="flex-1">
+              <label className="text-sm font-robotoMedium text-gray-700 dark:text-gray-300 mb-2 block">
+                Estado
+              </label>
+              <select
+                value={formData.estado}
+                onChange={(e) => {
+                  const estado = e.target.value as FormData["estado"];
+                  setFormData({
+                    ...formData,
+                    estado,
+                    // Por defecto solo los productos "activo" participan en
+                    // el modelo matemático; el switch de abajo sigue
+                    // permitiendo anular esto caso por caso.
+                    considerar_modelo_matematico: estado === "activo",
+                  });
+                }}
+                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 dark:text-white"
+              >
+                <option value="activo">Activo</option>
+                <option value="inactivo">Inactivo</option>
+                <option value="special_buy">Special Buy</option>
+              </select>
             </div>
           </div>
 

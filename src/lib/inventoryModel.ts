@@ -42,6 +42,7 @@ export interface ProductInput {
   piecesInTransit: number;
   dailyDemand: number; // piezas/día, 0 si no se conoce
   consideraModelo: boolean; // switch "tomar en cuenta en modelo matemático" del producto
+  estadoProducto: "activo" | "inactivo" | "special_buy";
 }
 
 export interface ProductResult extends ProductInput {

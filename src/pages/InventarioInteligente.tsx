@@ -163,6 +163,7 @@ export function InventarioInteligente() {
   const [filterSupplier, setFilterSupplier] = useState("");
   const [filterStatus, setFilterStatus] = useState<InventoryStatus | "">("");
   const [filterModelo, setFilterModelo] = useState<"" | "si" | "no">("si");
+  const [filterEstadoProducto, setFilterEstadoProducto] = useState<"" | "activo" | "inactivo" | "special_buy">("");
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 50;
 
@@ -250,6 +251,7 @@ export function InventarioInteligente() {
         dailyDemand: hdDailyDemand[mod] || 0,
         // Switch "tomar en cuenta en modelo matemático" del modal de edición
         consideraModelo: i.considerar_modelo_matematico !== false,
+        estadoProducto: (i.estado as "activo" | "inactivo" | "special_buy") ?? "activo",
       };
     });
     // El motor de cálculo solo debe operar sobre los productos marcados para
@@ -303,6 +305,8 @@ export function InventarioInteligente() {
     if (filterStatus) list = list.filter((r) => r.status === filterStatus);
     if (filterSupplier)
       list = list.filter((r) => r.supplier === filterSupplier);
+    if (filterEstadoProducto)
+      list = list.filter((r) => r.estadoProducto === filterEstadoProducto);
     if (search.trim()) {
       const q = search.trim().toLowerCase();
       list = list.filter(
@@ -311,12 +315,12 @@ export function InventarioInteligente() {
       );
     }
     return list;
-  }, [modeloFiltered, filterStatus, filterSupplier, search]);
+  }, [modeloFiltered, filterStatus, filterSupplier, filterEstadoProducto, search]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
-  useEffect(() => { setPage(1); }, [filterModelo, filterStatus, filterSupplier, search]);
+  useEffect(() => { setPage(1); }, [filterModelo, filterStatus, filterSupplier, filterEstadoProducto, search]);
 
   // ── Contenedores: primero elegir proveedor, luego pedir su óptimo al MILP ──
   const [ranking, setRanking] = useState<RankingProveedor[] | null>(null);
@@ -540,6 +544,7 @@ export function InventarioInteligente() {
               filterSupplier={filterSupplier}
               filterStatus={filterStatus}
               filterModelo={filterModelo}
+              filterEstadoProducto={filterEstadoProducto}
               search={search}
               page={page}
               totalPages={totalPages}
@@ -549,6 +554,7 @@ export function InventarioInteligente() {
               onSupplierChange={setFilterSupplier}
               onStatusChange={(v) => setFilterStatus(v as InventoryStatus | "")}
               onModeloChange={(v) => setFilterModelo(v as "" | "si" | "no")}
+              onEstadoProductoChange={(v) => setFilterEstadoProducto(v as "" | "activo" | "inactivo" | "special_buy")}
               onPageChange={setPage}
             />
           )}
@@ -580,6 +586,7 @@ interface StatusTabProps {
   filterSupplier: string;
   filterStatus: InventoryStatus | "";
   filterModelo: "" | "si" | "no";
+  filterEstadoProducto: "" | "activo" | "inactivo" | "special_buy";
   search: string;
   page: number;
   totalPages: number;
@@ -589,8 +596,15 @@ interface StatusTabProps {
   onSupplierChange: (v: string) => void;
   onStatusChange: (v: string) => void;
   onModeloChange: (v: string) => void;
+  onEstadoProductoChange: (v: string) => void;
   onPageChange: (p: number) => void;
 }
+
+const ESTADO_PRODUCTO_LABELS: Record<"activo" | "inactivo" | "special_buy", string> = {
+  activo: "Activo",
+  inactivo: "Inactivo",
+  special_buy: "Special Buy",
+};
 
 function StatusTab({
   paginated,
@@ -599,6 +613,7 @@ function StatusTab({
   filterSupplier,
   filterStatus,
   filterModelo,
+  filterEstadoProducto,
   search,
   page,
   totalPages,
@@ -608,6 +623,7 @@ function StatusTab({
   onSupplierChange,
   onStatusChange,
   onModeloChange,
+  onEstadoProductoChange,
   onPageChange,
 }: StatusTabProps) {
   return (
@@ -650,6 +666,16 @@ function StatusTab({
           <option value="si">✅ Considerados en el modelo</option>
           <option value="no">🚫 No considerados en el modelo</option>
         </select>
+        <select
+          value={filterEstadoProducto}
+          onChange={(e) => onEstadoProductoChange(e.target.value)}
+          className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200"
+        >
+          <option value="">Todos los estados de producto</option>
+          <option value="activo">Activo</option>
+          <option value="inactivo">Inactivo</option>
+          <option value="special_buy">Special Buy</option>
+        </select>
         <span className="ml-auto text-xs text-gray-400 dark:text-gray-500 self-center">
           {filtered.length} productos
         </span>
@@ -664,6 +690,7 @@ function StatusTab({
               <th className="px-3 py-2.5 text-left border-b border-r border-gray-300 dark:border-gray-600 min-w-[80px]">MOD</th>
               <th className="px-3 py-2.5 text-left border-b border-r border-gray-300 dark:border-gray-600 min-w-[200px]">Nombre</th>
               <th className="px-3 py-2.5 text-left border-b border-r border-gray-300 dark:border-gray-600 min-w-[100px]">Proveedor</th>
+              <th className="px-3 py-2.5 text-center border-b border-r border-gray-300 dark:border-gray-600 min-w-[90px]">Estado prod.</th>
               <th className="px-3 py-2.5 text-right border-b border-r border-gray-300 dark:border-gray-600">Stock</th>
               <th className="px-3 py-2.5 text-right border-b border-r border-gray-300 dark:border-gray-600">Dem./día HD</th>
               <th className="px-3 py-2.5 text-right border-b border-r border-gray-300 dark:border-gray-600">Días cob.</th>
@@ -693,6 +720,11 @@ function StatusTab({
                   </td>
                   <td className="px-3 py-2 text-gray-600 dark:text-gray-400 border-r border-gray-200 dark:border-gray-700 whitespace-nowrap">
                     {r.supplier}
+                  </td>
+                  <td className="px-3 py-2 text-center border-r border-gray-200 dark:border-gray-700 whitespace-nowrap">
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
+                      {ESTADO_PRODUCTO_LABELS[r.estadoProducto]}
+                    </span>
                   </td>
                   <td className="px-3 py-2 text-right font-medium text-gray-800 dark:text-gray-200 border-r border-gray-200 dark:border-gray-700">
                     {fmt(r.stock)}
