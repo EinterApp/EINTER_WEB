@@ -13,7 +13,18 @@ import { getMonterreyDateISO } from "../lib/dateMx";
 
 const PAGE_SIZE = 20;
 const TABLE_GRID_COLUMNS =
-  "7rem minmax(0,3fr) minmax(0,1.5fr) minmax(0,2fr) minmax(0,1.2fr) minmax(0,1.2fr) minmax(0,1.2fr) minmax(0,1.5fr)";
+  "7rem minmax(0,3fr) minmax(0,1.5fr) minmax(0,2fr) minmax(0,1.2fr) minmax(0,1.2fr) minmax(0,1.2fr) minmax(0,1.2fr) minmax(0,1.5fr)";
+
+const ESTADO_LABELS: Record<string, string> = {
+  activo: "Activo",
+  inactivo: "Inactivo",
+  special_buy: "Special Buy",
+};
+const ESTADO_BADGE_CLASS: Record<string, string> = {
+  activo: "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300",
+  inactivo: "bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-300",
+  special_buy: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300",
+};
 
 // Map a raw Odoo DB row to the Product type
 const mapOdooProduct = (item: Record<string, unknown>): Product => ({
@@ -21,6 +32,7 @@ const mapOdooProduct = (item: Record<string, unknown>): Product => ({
   sku: String(item.master_sku ?? ''),
   china_sku: item.sku_china != null ? String(item.sku_china) : null,
   name: String(item.nombre_producto ?? ''),
+  estado: (item.estado as Product["estado"]) ?? "activo",
   price: Number(item.precio) || 0,
   cost: Number(item.costo) || 0,
   photo: item.foto ? String(item.foto) : null,
@@ -56,6 +68,7 @@ const categoryName = (p: Product): string =>
 const PROD_COL_ACCESSORS: Record<string, (p: Product) => string> = {
   name: (p) => p.name || "",
   sku: (p) => String(p.sku || ""),
+  estado: (p) => ESTADO_LABELS[p.estado ?? "activo"] ?? "Activo",
   proveedor: (p) => p.supplier?.name || "",
   categoria: (p) => categoryName(p),
   weight: (p) => String(p.weight_kg ?? ""),
@@ -531,6 +544,7 @@ export function Productos() {
   const PROD_COLUMNS: { key: string; label: string }[] = [
     { key: "name", label: "Nombre" },
     { key: "sku", label: "MOD" },
+    { key: "estado", label: "Estado" },
     { key: "proveedor", label: "Proveedor" },
     { key: "stock", label: "Stock" },
     { key: "price", label: "Precio" },
@@ -723,6 +737,13 @@ export function Productos() {
                   <p className="text-gray-900 dark:text-white font-robotoRegular text-base text-center">
                     {product.sku}
                   </p>
+                </div>
+
+                {/* Estado */}
+                <div className="flex-[1.2] py-4 px-3 border-r border-gray-300 dark:border-gray-700 flex justify-center items-center">
+                  <span className={`text-xs font-robotoMedium px-2 py-1 rounded-full ${ESTADO_BADGE_CLASS[product.estado ?? "activo"]}`}>
+                    {ESTADO_LABELS[product.estado ?? "activo"]}
+                  </span>
                 </div>
 
                 {/* Proveedor */}

@@ -626,7 +626,7 @@ export function THDComparativo() {
   const [mes, setMes] = useState(0);
   const [dia, setDia] = useState(0);
   const [categoria, setCategoria] = useState("baños");
-  const [viewMode, setViewMode] = useState<"producto" | "orden">("producto");
+  const [viewMode, setViewMode] = useState<"producto" | "orden">("orden");
 
   // Por Producto state
   const [search, setSearch] = useState("");
@@ -652,6 +652,12 @@ export function THDComparativo() {
   const [modalData, setModalData] = useState<DetalleOrdenRow[]>([]);
   const [modalLoading, setModalLoading] = useState(false);
   const [modalError, setModalError] = useState<string | null>(null);
+
+  // Ordenes-por-producto drill-down (click a product row's "Ver órdenes")
+  const [productoOrdenes, setProductoOrdenes] = useState<{ master_sku: string; descripcion: string } | null>(null);
+  const [productoOrdenesData, setProductoOrdenesData] = useState<OrdenRow[]>([]);
+  const [productoOrdenesLoading, setProductoOrdenesLoading] = useState(false);
+  const [productoOrdenesError, setProductoOrdenesError] = useState<string | null>(null);
 
   // Upload state
   const [uploading, setUploading] = useState(false);
@@ -715,12 +721,13 @@ export function THDComparativo() {
   };
 
   useEffect(() => {
-    fetchData(2026, 0, "baños", 0);
+    fetchOrdenData(2026, 0, "baños", 0);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useRefetchOnFocus(useCallback(() => {
-    fetchData(anio, mes, categoria, dia);
-  }, [anio, mes, categoria, dia]));
+    if (viewMode === "producto") fetchData(anio, mes, categoria, dia);
+    else fetchOrdenData(anio, mes, categoria, dia);
+  }, [viewMode, anio, mes, categoria, dia]));
 
   // Fetch per-folio product breakdown when an order is selected
   useEffect(() => {
@@ -745,6 +752,23 @@ export function THDComparativo() {
     };
     loadModal();
   }, [selectedOrden]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const openProductoOrdenes = async (master_sku: string, descripcion: string) => {
+    setProductoOrdenes({ master_sku, descripcion });
+    setProductoOrdenesData([]);
+    setProductoOrdenesError(null);
+    setProductoOrdenesLoading(true);
+    try {
+      const raw = (await fetchAPI(
+        `/api/thd/comparativo/ordenes-por-producto/${encodeURIComponent(master_sku)}?anio=${anio}&categoria=${encodeURIComponent(categoria)}`
+      )) as { data?: OrdenRow[] };
+      setProductoOrdenesData(raw.data ?? []);
+    } catch (err) {
+      setProductoOrdenesError((err as Error).message);
+    } finally {
+      setProductoOrdenesLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (!toast) return;
@@ -868,6 +892,9 @@ export function THDComparativo() {
     setViewMode(mode);
     if (mode === "orden" && ordenData.length === 0 && !ordenLoading) {
       fetchOrdenData(anio, mes, categoria, dia);
+    }
+    if (mode === "producto" && data.length === 0 && !loading) {
+      fetchData(anio, mes, categoria, dia);
     }
   };
 
@@ -1045,16 +1072,6 @@ export function THDComparativo() {
         {/* View toggle */}
         <div className="flex gap-1 mb-5">
           <button
-            onClick={() => handleViewMode("producto")}
-            className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-              viewMode === "producto"
-                ? "bg-blue-600 text-white"
-                : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600"
-            }`}
-          >
-            Por Producto
-          </button>
-          <button
             onClick={() => handleViewMode("orden")}
             className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
               viewMode === "orden"
@@ -1063,6 +1080,16 @@ export function THDComparativo() {
             }`}
           >
             Por Orden
+          </button>
+          <button
+            onClick={() => handleViewMode("producto")}
+            className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+              viewMode === "producto"
+                ? "bg-blue-600 text-white"
+                : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600"
+            }`}
+          >
+            Por Producto
           </button>
         </div>
 
@@ -1371,13 +1398,23 @@ export function THDComparativo() {
                           {row.sku_thd}
                         </span>
                       </div>
-                      <div className="py-3 px-3 border-r border-gray-200 dark:border-gray-600 flex items-center">
+                      <div className="py-3 px-3 border-r border-gray-200 dark:border-gray-600 flex items-center gap-2">
                         <span
                           className="text-gray-900 dark:text-gray-100 text-sm truncate"
                           title={row.descripcion ?? undefined}
                         >
                           {row.descripcion}
                         </span>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openProductoOrdenes(row.master_sku, row.descripcion);
+                          }}
+                          className="shrink-0 text-[11px] px-1.5 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-900/60 transition-colors whitespace-nowrap"
+                          title="Ver todas las órdenes de este producto"
+                        >
+                          📦 Órdenes
+                        </button>
                       </div>
                       <div className="py-3 px-3 border-r border-gray-200 dark:border-gray-600 flex items-center justify-center">
                         <span className="text-gray-900 dark:text-gray-100 text-sm">
@@ -1571,6 +1608,113 @@ export function THDComparativo() {
         modalLoading={modalLoading}
         modalError={modalError}
       />
+
+      {/* ── Órdenes por producto (drill-down desde "Por Producto") ── */}
+      {productoOrdenes && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={() => setProductoOrdenes(null)}
+        >
+          <div
+            className="bg-white dark:bg-gray-800 rounded-lg shadow-2xl w-full max-w-4xl max-h-[85vh] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+              <div>
+                <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+                  Órdenes de {productoOrdenes.descripcion}
+                </h2>
+                <p className="text-sm text-gray-500 dark:text-gray-400 font-mono">
+                  MOD {productoOrdenes.master_sku}
+                </p>
+              </div>
+              <button
+                onClick={() => setProductoOrdenes(null)}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-2xl leading-none px-1"
+                aria-label="Cerrar"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-auto mx-6 my-4 border border-gray-300 dark:border-gray-600 rounded-lg">
+              {productoOrdenesLoading ? (
+                <div className="flex flex-col items-center justify-center py-16">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+                </div>
+              ) : productoOrdenesError ? (
+                <div className="flex flex-col items-center justify-center py-16">
+                  <p className="text-red-500 font-medium text-sm">Error al cargar órdenes</p>
+                  <p className="text-gray-400 dark:text-gray-500 text-sm mt-1">{productoOrdenesError}</p>
+                </div>
+              ) : productoOrdenesData.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 gap-2">
+                  <span className="text-4xl">📦</span>
+                  <p className="text-gray-500 dark:text-gray-400 text-sm">
+                    Este producto no aparece en ninguna orden todavía
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <div
+                    className="grid [&>*]:min-w-0 bg-gray-100 dark:bg-gray-700 border-b-2 border-gray-300 dark:border-gray-600 sticky top-0"
+                    style={{ gridTemplateColumns: TABLE_GRID_ORDEN }}
+                  >
+                    {["Folio", "Fecha", "Pedido", "Salida", "Diferencia", "% Cumplimiento", "Status"].map((label, i, arr) => (
+                      <div
+                        key={label}
+                        className={`py-3 px-3 ${i < arr.length - 1 ? "border-r border-gray-300 dark:border-gray-600" : ""} flex items-center justify-center`}
+                      >
+                        <span className="font-robotoMedium text-gray-900 dark:text-white text-sm">{label}</span>
+                      </div>
+                    ))}
+                  </div>
+                  {productoOrdenesData.map((row) => {
+                    const cfg = ORDEN_STATUS_CFG[row.status] ?? ORDEN_STATUS_CFG.sin_pedido;
+                    const isNeg = row.diferencia < 0;
+                    return (
+                      <div
+                        key={row.numero_folio}
+                        className={`grid [&>*]:min-w-0 border-b border-gray-200 dark:border-gray-700 cursor-pointer hover:opacity-90 ${cfg.rowBg}`}
+                        style={{ gridTemplateColumns: TABLE_GRID_ORDEN }}
+                        onClick={() => { setProductoOrdenes(null); setSelectedOrden(row); }}
+                      >
+                        <div className="py-3 px-3 border-r border-gray-200 dark:border-gray-600 flex items-center justify-center">
+                          <span className="text-blue-600 dark:text-blue-400 text-sm font-mono">{row.numero_folio}</span>
+                        </div>
+                        <div className="py-3 px-3 border-r border-gray-200 dark:border-gray-600 flex items-center justify-center text-sm text-gray-600 dark:text-gray-400">
+                          {formatFecha(row.fecha_orden)}
+                        </div>
+                        <div className="py-3 px-3 border-r border-gray-200 dark:border-gray-600 flex items-center justify-center text-sm">
+                          {row.total_pedido.toLocaleString("es-MX")}
+                        </div>
+                        <div className="py-3 px-3 border-r border-gray-200 dark:border-gray-600 flex items-center justify-center text-sm">
+                          {row.total_salida.toLocaleString("es-MX")}
+                        </div>
+                        <div className="py-3 px-3 border-r border-gray-200 dark:border-gray-600 flex items-center justify-center">
+                          <span className={`text-sm font-medium ${isNeg ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400"}`}>
+                            {row.diferencia.toLocaleString("es-MX")}
+                          </span>
+                        </div>
+                        <div className="py-3 px-3 border-r border-gray-200 dark:border-gray-600 flex items-center justify-center">
+                          <span className={`text-sm font-bold ${pctTextColor(row.pct_cumplimiento)}`}>
+                            {row.pct_cumplimiento.toFixed(1)}%
+                          </span>
+                        </div>
+                        <div className="py-3 px-3 flex items-center justify-center">
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${cfg.badgeBg} ${cfg.badgeText}`}>
+                            {cfg.label}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Nueva Orden HD Modal ── */}
       {showNuevaOrden && (

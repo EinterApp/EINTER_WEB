@@ -86,6 +86,7 @@ export interface Product {
   sku: string;
   china_sku?: string | null;
   name: string;
+  estado?: 'activo' | 'inactivo' | 'special_buy';
   photo?: string | null;
   dimensions_cm?: ProductDimensions;
   weight_kg: number;

@@ -16,6 +16,7 @@ interface CostoCelda {
   id: number | null;
   precio: number | null;
   costo: number | null;
+  moneda: string;
   arrastrado: boolean;
 }
 
@@ -38,11 +39,12 @@ interface HistorialPunto {
   semana_label: string;
   precio: number | null;
   costo: number | null;
+  moneda: string;
 }
 
-function formatMoney(v: number | null): string {
+function formatMoney(v: number | null, moneda: string = "MXN"): string {
   if (v == null) return "-";
-  return v.toLocaleString("es-MX", { style: "currency", currency: "MXN", minimumFractionDigits: 2 });
+  return v.toLocaleString("es-MX", { style: "currency", currency: moneda, minimumFractionDigits: 2 });
 }
 
 const MESES_ES = [
@@ -82,14 +84,14 @@ function NuevaSemanaModal({
     semanas.length > 0 ? String(semanas[semanas.length - 1].semana_num) : ""
   );
   const [nuevaSemanaNum, setNuevaSemanaNum] = useState("");
-  const [valores, setValores] = useState<Record<number, { precio: string; costo: string }>>({});
+  const [valores, setValores] = useState<Record<number, { precio: string; costo: string; moneda: string }>>({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const lastSemana = semanas.length > 0 ? semanas[semanas.length - 1].semana_num : null;
 
   useEffect(() => {
-    const init: Record<number, { precio: string; costo: string }> = {};
+    const init: Record<number, { precio: string; costo: string; moneda: string }> = {};
     const num = semanaMode === "existente" ? Number(semanaSeleccionada) : NaN;
     productos.forEach((p) => {
       let v: CostoCelda | undefined;
@@ -98,12 +100,13 @@ function NuevaSemanaModal({
       init[p.mod] = {
         precio: v?.precio != null ? String(v.precio) : "",
         costo: v?.costo != null ? String(v.costo) : "",
+        moneda: v?.moneda ?? "MXN",
       };
     });
     setValores(init);
   }, [semanaMode, semanaSeleccionada, productos, lastSemana]);
 
-  const setCampo = (mod: number, campo: "precio" | "costo", valor: string) => {
+  const setCampo = (mod: number, campo: "precio" | "costo" | "moneda", valor: string) => {
     setValores((prev) => ({ ...prev, [mod]: { ...prev[mod], [campo]: valor } }));
   };
 
@@ -129,13 +132,13 @@ function NuevaSemanaModal({
 
     const filas = productos
       .map((p) => {
-        const v = valores[p.mod] ?? { precio: "", costo: "" };
+        const v = valores[p.mod] ?? { precio: "", costo: "", moneda: "MXN" };
         const precio = v.precio !== "" ? Number(v.precio) : null;
         const costo = v.costo !== "" ? Number(v.costo) : null;
         if (precio == null && costo == null) return null;
-        return { mod: p.mod, precio, costo };
+        return { mod: p.mod, precio, costo, moneda: v.moneda || "MXN" };
       })
-      .filter((f): f is { mod: number; precio: number | null; costo: number | null } => f !== null);
+      .filter((f): f is { mod: number; precio: number | null; costo: number | null; moneda: string } => f !== null);
 
     if (filas.length === 0) { setError("Ingresa al menos un precio o costo"); return; }
 
@@ -216,8 +219,9 @@ function NuevaSemanaModal({
                 <tr className="text-left text-xs text-gray-500 dark:text-gray-400">
                   <th className="px-4 py-2 font-medium">MOD</th>
                   <th className="px-4 py-2 font-medium">Producto</th>
-                  <th className="px-4 py-2 font-medium w-32 text-center">Precio</th>
+                  <th className="px-4 py-2 font-medium w-32 text-center">Precio (MXN)</th>
                   <th className="px-4 py-2 font-medium w-32 text-center">Costo</th>
+                  <th className="px-4 py-2 font-medium w-20 text-center">Moneda</th>
                 </tr>
               </thead>
               <tbody>
@@ -238,6 +242,14 @@ function NuevaSemanaModal({
                         value={valores[p.mod]?.costo ?? ""}
                         onChange={(e) => setCampo(p.mod, "costo", e.target.value)}
                         className="w-full px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm text-right" />
+                    </td>
+                    <td className="px-4 py-2 align-middle">
+                      <select value={valores[p.mod]?.moneda ?? "MXN"}
+                        onChange={(e) => setCampo(p.mod, "moneda", e.target.value)}
+                        className="w-full px-1 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-xs">
+                        <option value="MXN">MXN</option>
+                        <option value="USD">USD</option>
+                      </select>
                     </td>
                   </tr>
                 ))}
@@ -322,7 +334,7 @@ function GraficaModal({ mod, nombre, onClose }: { mod: number; nombre: string; o
                 <span className="w-3 h-3 rounded-full bg-blue-600 inline-block" /> Precio
               </span>
               <span className="flex items-center gap-1.5 text-gray-700 dark:text-gray-300">
-                <span className="w-3 h-3 rounded-full bg-red-600 inline-block" /> Costo
+                <span className="w-3 h-3 rounded-full bg-red-600 inline-block" /> Costo ({puntos.find((p) => p.costo != null)?.moneda ?? "MXN"})
               </span>
             </div>
           </>
@@ -442,10 +454,10 @@ export function CostosVariables() {
                     return (
                       <td key={s.semana_num} className={`border-b border-r border-gray-200 dark:border-gray-700 px-2 py-1.5 text-center ${c?.arrastrado ? "bg-gray-50 dark:bg-gray-800/60" : ""}`}>
                         <div className="text-xs font-semibold text-gray-800 dark:text-gray-200 leading-tight">
-                          {formatMoney(c?.precio ?? null)}
+                          {formatMoney(c?.precio ?? null, "MXN")}
                         </div>
                         <div className="text-[10px] text-red-600 dark:text-red-400 leading-tight">
-                          {formatMoney(c?.costo ?? null)}
+                          {c?.costo != null ? formatMoney(c.costo, c.moneda) : "-"}
                         </div>
                       </td>
                     );

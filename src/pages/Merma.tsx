@@ -15,6 +15,7 @@ interface MermaRow {
   motivo: string;
   folio_recibo: string | null;
   notas: string | null;
+  foto: string | null;
   usuario_nombre: string | null;
   fecha_registro: string;
 }
@@ -138,6 +139,7 @@ export function Merma() {
   const [motivo, setMotivo] = useState("");
   const [folioRecibo, setFolioRecibo] = useState("");
   const [notas, setNotas] = useState("");
+  const [fotoBase64, setFotoBase64] = useState<string | null>(null);
   const [createLoading, setCreateLoading] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
 
@@ -151,6 +153,7 @@ export function Merma() {
   const [gestionarRazonesVisible, setGestionarRazonesVisible] = useState(false);
 
   const [toast, setToast] = useState<{ ok: boolean; text: string } | null>(null);
+  const [zoomedFoto, setZoomedFoto] = useState<string | null>(null);
 
   useEffect(() => {
     if (!toast) return;
@@ -195,7 +198,7 @@ export function Merma() {
   };
 
   const openCreate = () => {
-    setSku(""); setCantidad(""); setMotivo(""); setFolioRecibo(""); setNotas("");
+    setSku(""); setCantidad(""); setMotivo(""); setFolioRecibo(""); setNotas(""); setFotoBase64(null);
     setCreateError(null); setShowNuevaRazon(false); setNuevaRazon("");
     setCreateVisible(true);
     loadRazones();
@@ -221,6 +224,43 @@ export function Merma() {
     }
   };
 
+  const compressImage = async (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement("canvas");
+          let width = img.width;
+          let height = img.height;
+          if (width > 800) {
+            height = Math.round((height * 800) / width);
+            width = 800;
+          }
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext("2d");
+          if (!ctx) { reject(new Error("No se pudo procesar la imagen")); return; }
+          ctx.drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL("image/jpeg", 0.5));
+        };
+        img.onerror = () => reject(new Error("No se pudo cargar la imagen"));
+        img.src = e.target?.result as string;
+      };
+      reader.onerror = () => reject(new Error("No se pudo leer el archivo"));
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handlePickFoto = async (file: File) => {
+    try {
+      const compressed = await compressImage(file);
+      setFotoBase64(compressed);
+    } catch (err) {
+      setCreateError((err as Error).message);
+    }
+  };
+
   const handleCreate = async () => {
     setCreateError(null);
     const id_articulo = skuToId[sku];
@@ -237,9 +277,11 @@ export function Merma() {
           id_articulo, cantidad: cant, motivo,
           folio_recibo: folioRecibo.trim() || null,
           notas: notas.trim() || null,
+          foto: fotoBase64,
         }),
       });
       setCreateVisible(false);
+      setFotoBase64(null);
       setToast({ ok: true, text: "Merma registrada y descontada del inventario." });
       setReload((c) => c + 1);
     } catch (err) {
@@ -324,9 +366,14 @@ export function Merma() {
                 <div className="py-3 px-3 border-r border-gray-200 dark:border-gray-600 flex items-center justify-center text-xs text-gray-600 dark:text-gray-400">
                   {formatDate(r.fecha_registro)}
                 </div>
-                <div className="py-3 px-3 border-r border-gray-200 dark:border-gray-600 flex items-center text-sm truncate" title={r.producto_nombre}>
-                  <span className="font-mono text-xs text-gray-500 dark:text-gray-400 mr-2">{r.sku}</span>
-                  {r.producto_nombre}
+                <div className="py-3 px-3 border-r border-gray-200 dark:border-gray-600 flex items-center gap-2 text-sm truncate" title={r.producto_nombre}>
+                  <span className="font-mono text-xs text-gray-500 dark:text-gray-400">{r.sku}</span>
+                  <span className="truncate">{r.producto_nombre}</span>
+                  {r.foto && (
+                    <button onClick={() => setZoomedFoto(r.foto)} className="shrink-0" title="Ver foto">
+                      <img src={r.foto} alt="Foto merma" className="w-6 h-6 rounded object-cover border border-gray-300 dark:border-gray-600" />
+                    </button>
+                  )}
                 </div>
                 <div className="py-3 px-3 border-r border-gray-200 dark:border-gray-600 flex items-center justify-center text-sm font-semibold">
                   {r.cantidad}
@@ -435,6 +482,26 @@ export function Merma() {
                     className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm" />
                 </div>
               </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Foto (opcional)</label>
+                <div className="flex items-center gap-3">
+                  {fotoBase64 && (
+                    <img src={fotoBase64} alt="Foto merma" className="w-16 h-16 rounded object-cover border border-gray-300 dark:border-gray-600" />
+                  )}
+                  <input type="file" accept="image/*"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) handlePickFoto(file);
+                    }}
+                    className="text-sm text-gray-600 dark:text-gray-300 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-blue-50 file:text-blue-700 dark:file:bg-blue-900/40 dark:file:text-blue-300 file:text-sm" />
+                  {fotoBase64 && (
+                    <button type="button" onClick={() => setFotoBase64(null)}
+                      className="text-xs text-red-600 dark:text-red-400 hover:underline">
+                      Quitar
+                    </button>
+                  )}
+                </div>
+              </div>
             </div>
             <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-200 dark:border-gray-700">
               <button onClick={() => setCreateVisible(false)} disabled={createLoading}
@@ -481,6 +548,12 @@ export function Merma() {
           onClose={() => setGestionarRazonesVisible(false)}
           onChanged={loadRazones}
         />
+      )}
+
+      {zoomedFoto && (
+        <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4" onClick={() => setZoomedFoto(null)}>
+          <img src={zoomedFoto} alt="Foto merma" className="max-w-full max-h-full rounded-lg" />
+        </div>
       )}
     </div>
   );
