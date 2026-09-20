@@ -137,8 +137,8 @@ export function PedidoPersonalizado() {
       // Cargar demanda HD, proveedores y productos en paralelo
       const [demandaRes, provRes, ...productBatches] = await Promise.all([
         fetchAPI('/api/ventas-hd/demanda-diaria'),
-        fetchAPI('/api/odoo/proveedores?pageSize=500'),
-        fetchAPI('/api/odoo/productos?page=1&pageSize=100'),
+        fetchAPI('/api/catalogo/proveedores?pageSize=500'),
+        fetchAPI('/api/catalogo/productos?page=1&pageSize=100'),
       ]) as [{ mod: string; demanda_diaria: number }[], { items?: Record<string, unknown>[] }, ...unknown[]];
 
       const demanda: Record<string, number> = {};
@@ -156,7 +156,7 @@ export function PedidoPersonalizado() {
       const total: number = firstBatch.total || 0;
       let page = 2;
       while (items.length < total) {
-        const res = await fetchAPI(`/api/odoo/productos?page=${page}&pageSize=100`) as { items?: Record<string, unknown>[] };
+        const res = await fetchAPI(`/api/catalogo/productos?page=${page}&pageSize=100`) as { items?: Record<string, unknown>[] };
         const batch: Record<string, unknown>[] = res.items || [];
         items.push(...batch);
         if (batch.length === 0 || page > 30) break;

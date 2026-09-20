@@ -176,7 +176,7 @@ export function InventarioInteligente() {
       let pg = 1;
       while (true) {
         const res = (await fetchAPI(
-          `/api/odoo/productos?page=${pg}&pageSize=100`,
+          `/api/catalogo/productos?page=${pg}&pageSize=100`,
         )) as { items?: unknown[]; total?: number };
         const items: unknown[] = res.items || [];
         all.push(...items);

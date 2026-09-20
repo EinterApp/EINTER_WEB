@@ -51,8 +51,8 @@ export function Movimientos() {
     try {
       // Fetch both entradas and salidas from Odoo endpoints
       const [entradasRes, salidasRes] = await Promise.all([
-        fetchAPI("/api/odoo/entradas"),
-        fetchAPI("/api/odoo/salidas"),
+        fetchAPI("/api/catalogo/entradas"),
+        fetchAPI("/api/catalogo/salidas"),
       ]) as [{ items?: Record<string, unknown>[] }, { items?: Record<string, unknown>[] }];
 
       // Map Odoo fields to Movement type

@@ -74,7 +74,7 @@ const PROD_COL_ACCESSORS: Record<string, (p: Product) => string> = {
   weight: (p) => String(p.weight_kg ?? ""),
   stock: (p) => String(p.stock ?? ""),
   price: (p) => `$${parseFloat(String(p.price || 0)).toFixed(2)}`,
-  cost: (p) => `$${parseFloat(String(p.cost || 0)).toFixed(2)}`,
+  cost: (p) => (p.cost ? `$${parseFloat(String(p.cost)).toFixed(2)}` : "-"),
 };
 
 export function Productos() {
@@ -117,7 +117,7 @@ export function Productos() {
       // Fetch ALL products (every page), not just the current page
       const firstPageSize = 200;
       const firstRes = await fetchAPI(
-        `/api/odoo/productos?page=1&pageSize=${firstPageSize}`
+        `/api/catalogo/productos?page=1&pageSize=${firstPageSize}`
       ) as { items?: Record<string, unknown>[]; total?: number; pageSize?: number };
 
       const total = firstRes.total || 0;
@@ -127,7 +127,7 @@ export function Productos() {
       const totalPagesToFetch = Math.ceil(total / pageSize);
       for (let p = 2; p <= totalPagesToFetch; p++) {
         const res = await fetchAPI(
-          `/api/odoo/productos?page=${p}&pageSize=${pageSize}`
+          `/api/catalogo/productos?page=${p}&pageSize=${pageSize}`
         ) as { items?: Record<string, unknown>[] };
         allItems.push(...(res.items || []));
       }
@@ -190,7 +190,7 @@ export function Productos() {
     try {
       const firstPageSize = 200;
       const first = (await fetchAPI(
-        `/api/odoo/productos?page=1&pageSize=${firstPageSize}`
+        `/api/catalogo/productos?page=1&pageSize=${firstPageSize}`
       )) as { items?: Record<string, unknown>[]; total?: number; pageSize?: number };
 
       const total = first.total || 0;
@@ -200,7 +200,7 @@ export function Productos() {
       const pages = Math.ceil(total / ps);
       for (let p = 2; p <= pages; p++) {
         const r = (await fetchAPI(
-          `/api/odoo/productos?page=${p}&pageSize=${ps}`
+          `/api/catalogo/productos?page=${p}&pageSize=${ps}`
         )) as { items?: Record<string, unknown>[] };
         allItems.push(...(r.items || []));
       }
@@ -386,7 +386,6 @@ export function Productos() {
         peso_kg: productData.weight_kg || 0,
         existencias: productData.stock || 0,
         precio: productData.price || 0,
-        costo: productData.cost || 0,
         id_proveedor: productData.supplier?.id || null,
         id_categoria: productData.category ? parseInt(String(productData.category)) : null,
         cantidad_x_ctn: productData.qty_per_carton ?? null,
@@ -445,7 +444,6 @@ export function Productos() {
       if (productData.stock !== undefined)
         apiData.existencias = productData.stock;
       if (productData.price !== undefined) apiData.precio = productData.price;
-      if (productData.cost !== undefined) apiData.costo = productData.cost;
       if (productData.supplier?.id !== undefined)
         apiData.id_proveedor = productData.supplier.id;
       if (productData.qty_per_carton !== undefined)
@@ -770,7 +768,7 @@ export function Productos() {
                 {/* Costo */}
                 <div className="flex-[1.2] py-4 px-3 border-r border-gray-300 dark:border-gray-700 flex justify-center items-center">
                   <p className="text-gray-900 dark:text-white font-robotoRegular text-base text-center">
-                    ${parseFloat(String(product.cost || 0)).toFixed(2)}
+                    {product.cost ? `$${parseFloat(String(product.cost)).toFixed(2)}` : "-"}
                   </p>
                 </div>
 

@@ -42,7 +42,7 @@ interface HistorialPunto {
   moneda: string;
 }
 
-function formatMoney(v: number | null, moneda: string = "MXN"): string {
+function formatMoney(v: number | null, moneda: string = "USD"): string {
   if (v == null) return "-";
   return v.toLocaleString("es-MX", { style: "currency", currency: moneda, minimumFractionDigits: 2 });
 }
@@ -100,7 +100,7 @@ function NuevaSemanaModal({
       init[p.mod] = {
         precio: v?.precio != null ? String(v.precio) : "",
         costo: v?.costo != null ? String(v.costo) : "",
-        moneda: v?.moneda ?? "MXN",
+        moneda: "USD",
       };
     });
     setValores(init);
@@ -132,11 +132,11 @@ function NuevaSemanaModal({
 
     const filas = productos
       .map((p) => {
-        const v = valores[p.mod] ?? { precio: "", costo: "", moneda: "MXN" };
+        const v = valores[p.mod] ?? { precio: "", costo: "", moneda: "USD" };
         const precio = v.precio !== "" ? Number(v.precio) : null;
         const costo = v.costo !== "" ? Number(v.costo) : null;
         if (precio == null && costo == null) return null;
-        return { mod: p.mod, precio, costo, moneda: v.moneda || "MXN" };
+        return { mod: p.mod, precio, costo, moneda: "USD" };
       })
       .filter((f): f is { mod: number; precio: number | null; costo: number | null; moneda: string } => f !== null);
 
@@ -244,12 +244,7 @@ function NuevaSemanaModal({
                         className="w-full px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm text-right" />
                     </td>
                     <td className="px-4 py-2 align-middle">
-                      <select value={valores[p.mod]?.moneda ?? "MXN"}
-                        onChange={(e) => setCampo(p.mod, "moneda", e.target.value)}
-                        className="w-full px-1 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-xs">
-                        <option value="MXN">MXN</option>
-                        <option value="USD">USD</option>
-                      </select>
+                      <span className="block text-center text-xs font-medium text-gray-600 dark:text-gray-300">USD</span>
                     </td>
                   </tr>
                 ))}
@@ -334,7 +329,7 @@ function GraficaModal({ mod, nombre, onClose }: { mod: number; nombre: string; o
                 <span className="w-3 h-3 rounded-full bg-blue-600 inline-block" /> Precio
               </span>
               <span className="flex items-center gap-1.5 text-gray-700 dark:text-gray-300">
-                <span className="w-3 h-3 rounded-full bg-red-600 inline-block" /> Costo ({puntos.find((p) => p.costo != null)?.moneda ?? "MXN"})
+                <span className="w-3 h-3 rounded-full bg-red-600 inline-block" /> Costo ({puntos.find((p) => p.costo != null)?.moneda ?? "USD"})
               </span>
             </div>
           </>
