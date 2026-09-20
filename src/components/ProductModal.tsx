@@ -121,7 +121,7 @@ export function ProductModal({
   const fetchSuppliers = async () => {
     setLoadingSuppliers(true);
     try {
-      const data = await fetchAPI("/api/odoo/proveedores") as { items?: { id_proveedor?: number; id?: number; nombre?: string; name?: string }[] };
+      const data = await fetchAPI("/api/catalogo/proveedores") as { items?: { id_proveedor?: number; id?: number; nombre?: string; name?: string }[] };
       const suppliersList = data.items || [];
       setSuppliers(
         suppliersList.map((supplier: { id_proveedor?: number; id?: number; nombre?: string; name?: string }) => ({

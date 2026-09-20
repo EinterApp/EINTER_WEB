@@ -54,7 +54,7 @@ export function Proveedores() {
     setError(null);
 
     try {
-      const response = await fetchAPI(`/api/odoo/proveedores`) as { items?: Record<string, unknown>[] };
+      const response = await fetchAPI(`/api/catalogo/proveedores`) as { items?: Record<string, unknown>[] };
 
       // Map Odoo raw DB fields to Proveedor type
       const mapped: Proveedor[] = (response.items || []).map((item: Record<string, unknown>) => ({

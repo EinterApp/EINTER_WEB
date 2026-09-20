@@ -106,7 +106,7 @@ export function VentaModal({
 
     try {
       // Buscar producto por SKU usando endpoint Odoo
-      const data = await fetchAPI("/api/odoo/productos?pageSize=1000") as { items?: Record<string, unknown>[] };
+      const data = await fetchAPI("/api/catalogo/productos?pageSize=1000") as { items?: Record<string, unknown>[] };
 
       const rawItems: Record<string, unknown>[] = data.items || [];
 
