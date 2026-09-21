@@ -168,7 +168,7 @@ function NuevaSemanaModal({
             Semana de costos {anio}
           </h3>
           <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-            Los valores se prellenan con el último precio/costo capturado (se arrastra hasta que lo cambies).
+            Aquí se captura el precio (MXN) y el costo (USD) de cada producto; en Productos solo se muestran. Se prellena con el último valor capturado.
           </p>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Semana</label>
           <div className="flex items-center gap-3 flex-wrap">
@@ -219,9 +219,8 @@ function NuevaSemanaModal({
                 <tr className="text-left text-xs text-gray-500 dark:text-gray-400">
                   <th className="px-4 py-2 font-medium">MOD</th>
                   <th className="px-4 py-2 font-medium">Producto</th>
-                  <th className="px-4 py-2 font-medium w-32 text-center">Precio (MXN)</th>
-                  <th className="px-4 py-2 font-medium w-32 text-center">Costo</th>
-                  <th className="px-4 py-2 font-medium w-20 text-center">Moneda</th>
+                  <th className="px-4 py-2 font-medium w-36 text-center">Precio (MXN)</th>
+                  <th className="px-4 py-2 font-medium w-36 text-center">Costo (USD)</th>
                 </tr>
               </thead>
               <tbody>
@@ -242,9 +241,6 @@ function NuevaSemanaModal({
                         value={valores[p.mod]?.costo ?? ""}
                         onChange={(e) => setCampo(p.mod, "costo", e.target.value)}
                         className="w-full px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm text-right" />
-                    </td>
-                    <td className="px-4 py-2 align-middle">
-                      <span className="block text-center text-xs font-medium text-gray-600 dark:text-gray-300">USD</span>
                     </td>
                   </tr>
                 ))}
@@ -377,7 +373,7 @@ export function CostosVariables() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Costos Variables</h1>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
-            Precio y costo por semana; se arrastra el último valor hasta que lo actualices.
+            Precio (MXN) y costo (USD) por semana; se arrastra el último valor hasta que lo actualices. Es el único lugar donde se editan.
           </p>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
@@ -428,7 +424,7 @@ export function CostosVariables() {
                 <th className="sticky left-0 z-20 bg-gray-100 dark:bg-gray-700 border-b-2 border-r-2 border-gray-300 dark:border-gray-600 px-3 py-2 text-left text-xs text-gray-500 dark:text-gray-400 min-w-[3rem]">MOD</th>
                 <th className="sticky left-12 z-20 bg-gray-100 dark:bg-gray-700 border-b-2 border-r-2 border-gray-300 dark:border-gray-600 px-3 py-2 text-left text-xs text-gray-500 dark:text-gray-400 min-w-[14rem] max-w-[16rem]">Producto</th>
                 {semanas.map((s) => (
-                  <th key={s.semana_num} className="border-b-2 border-r border-gray-300 dark:border-gray-600 px-2 py-1 text-center text-xs font-semibold text-gray-700 dark:text-gray-300 min-w-[7rem] whitespace-nowrap">
+                  <th key={s.semana_num} className="border-b-2 border-r border-gray-300 dark:border-gray-600 px-2 py-1 text-center text-xs font-semibold text-gray-700 dark:text-gray-300 min-w-[9.5rem] whitespace-nowrap">
                     Sem {s.semana_num}<br /><span className="font-normal text-gray-400">{s.semana_label}</span>
                   </th>
                 ))}
@@ -448,10 +444,12 @@ export function CostosVariables() {
                     const c = p.costos[s.semana_num];
                     return (
                       <td key={s.semana_num} className={`border-b border-r border-gray-200 dark:border-gray-700 px-2 py-1.5 text-center ${c?.arrastrado ? "bg-gray-50 dark:bg-gray-800/60" : ""}`}>
-                        <div className="text-xs font-semibold text-gray-800 dark:text-gray-200 leading-tight">
+                        <div className="flex items-baseline justify-between gap-2 text-sm font-semibold text-gray-800 dark:text-gray-200 leading-tight">
+                          <span className="text-[10px] font-normal text-gray-400">Precio</span>
                           {formatMoney(c?.precio ?? null, "MXN")}
                         </div>
-                        <div className="text-[10px] text-red-600 dark:text-red-400 leading-tight">
+                        <div className="flex items-baseline justify-between gap-2 text-xs text-red-600 dark:text-red-400 leading-tight mt-0.5">
+                          <span className="text-[10px] text-gray-400">Costo</span>
                           {c?.costo != null ? formatMoney(c.costo, c.moneda) : "-"}
                         </div>
                       </td>
