@@ -2,7 +2,7 @@
 // as Ventas HD), open to any authenticated user to edit. Saving a week also
 // updates the product's official price/cost. Each row can open a small
 // time-series chart of its price/cost history.
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useDarkMode } from "../context/DarkModeContext";
 import { fetchAPI } from "../lib/fetch";
 import { getMonterreyYear } from "../lib/dateMx";
@@ -69,6 +69,28 @@ function generateWeekLabel(anio: number, semana: number): string {
   return `${d1}-${d2} ${MESES_ES[sunday.getMonth()]}`;
 }
 
+function weeksInYear(y: number): number {
+  const p = (x: number) => (x + Math.floor(x / 4) - Math.floor(x / 100) + Math.floor(x / 400)) % 7;
+  return p(y) === 4 || p(y - 1) === 3 ? 53 : 52;
+}
+
+// Every ISO week of the year, using the server's label when the week has data.
+function todasLasSemanas(anio: number, capturadas: Semana[]): Semana[] {
+  const byNum = new Map(capturadas.map((s) => [s.semana_num, s]));
+  return Array.from({ length: weeksInYear(anio) }, (_, i) => {
+    const n = i + 1;
+    return byNum.get(n) ?? { semana_num: n, semana_label: generateWeekLabel(anio, n) };
+  });
+}
+
+function currentIsoWeek(): number {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() + 3 - ((d.getDay() + 6) % 7));
+  const week1 = new Date(d.getFullYear(), 0, 4);
+  return 1 + Math.round(((d.getTime() - week1.getTime()) / 86400000 - 3 + ((week1.getDay() + 6) % 7)) / 7);
+}
+
 // ─── Nueva semana modal ────────────────────────────────────────────────────
 
 function NuevaSemanaModal({
@@ -77,26 +99,23 @@ function NuevaSemanaModal({
   anio: number; semanas: Semana[]; productos: Producto[];
   onClose: () => void; onSaved: () => void;
 }) {
-  const [semanaMode, setSemanaMode] = useState<"existente" | "nueva">(
-    semanas.length > 0 ? "existente" : "nueva"
-  );
-  const [semanaSeleccionada, setSemanaSeleccionada] = useState<string>(
-    semanas.length > 0 ? String(semanas[semanas.length - 1].semana_num) : ""
-  );
-  const [nuevaSemanaNum, setNuevaSemanaNum] = useState("");
+  const capturadas = semanas.filter((sem) => productos.some((p) => p.costos[sem.semana_num] && !p.costos[sem.semana_num].arrastrado));
+  const semanaInicial = capturadas.length > 0 ? capturadas[capturadas.length - 1].semana_num : (semanas[0]?.semana_num ?? 1);
+  const [semanaSeleccionada, setSemanaSeleccionada] = useState<string>(String(semanaInicial));
   const [valores, setValores] = useState<Record<number, { precio: string; costo: string; moneda: string }>>({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const lastSemana = semanas.length > 0 ? semanas[semanas.length - 1].semana_num : null;
-
   useEffect(() => {
     const init: Record<number, { precio: string; costo: string; moneda: string }> = {};
-    const num = semanaMode === "existente" ? Number(semanaSeleccionada) : NaN;
+    const num = Number(semanaSeleccionada);
     productos.forEach((p) => {
+      // Prefill from this week, or the closest earlier week that has a value.
       let v: CostoCelda | undefined;
-      if (!isNaN(num)) v = p.costos[num];
-      else if (lastSemana != null) v = p.costos[lastSemana]; // carry forward into a brand-new week
+      for (let n = num; n >= 1 && !v; n--) {
+        const c = p.costos[n];
+        if (c && (c.precio != null || c.costo != null)) v = c;
+      }
       init[p.mod] = {
         precio: v?.precio != null ? String(v.precio) : "",
         costo: v?.costo != null ? String(v.costo) : "",
@@ -104,31 +123,17 @@ function NuevaSemanaModal({
       };
     });
     setValores(init);
-  }, [semanaMode, semanaSeleccionada, productos, lastSemana]);
+  }, [semanaSeleccionada, productos]);
 
   const setCampo = (mod: number, campo: "precio" | "costo" | "moneda", valor: string) => {
     setValores((prev) => ({ ...prev, [mod]: { ...prev[mod], [campo]: valor } }));
   };
 
   const handleSave = async () => {
-    let semana_num: number;
-    let semana_label: string;
-
-    if (semanaMode === "existente") {
-      const sem = semanas.find((s) => s.semana_num === Number(semanaSeleccionada));
-      if (!sem) { setError("Selecciona una semana"); return; }
-      semana_num = sem.semana_num;
-      semana_label = sem.semana_label;
-    } else {
-      semana_num = Number(nuevaSemanaNum);
-      if (!nuevaSemanaNum || isNaN(semana_num) || semana_num < 1 || semana_num > 53) {
-        setError("Número de semana inválido (1–53)"); return;
-      }
-      if (semanas.some((s) => s.semana_num === semana_num)) {
-        setError(`La semana ${semana_num} ya existe`); return;
-      }
-      semana_label = generateWeekLabel(anio, semana_num);
-    }
+    const sem = semanas.find((x) => x.semana_num === Number(semanaSeleccionada));
+    if (!sem) { setError("Selecciona una semana"); return; }
+    const semana_num = sem.semana_num;
+    const semana_label = sem.semana_label;
 
     const filas = productos
       .map((p) => {
@@ -165,49 +170,18 @@ function NuevaSemanaModal({
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-3xl flex flex-col max-h-[90vh]">
         <div className="p-6 pb-4 border-b border-gray-200 dark:border-gray-700">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">
-            Semana de costos {anio}
+            Capturar costos {anio}
           </h3>
           <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-            Aquí se captura el precio (MXN) y el costo (USD) de cada producto; en Productos solo se muestran. Se prellena con el último valor capturado.
+            Aquí se captura el precio (MXN) y el costo (USD) de cada producto; en Productos solo se muestran. Se prellena con el último valor capturado antes de esa semana.
           </p>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Semana</label>
-          <div className="flex items-center gap-3 flex-wrap">
-            <div className="flex rounded-lg overflow-hidden border border-gray-300 dark:border-gray-600">
-              {semanas.length > 0 && (
-                <button type="button" onClick={() => setSemanaMode("existente")}
-                  className={`px-3 py-1.5 text-sm font-medium transition-colors ${
-                    semanaMode === "existente" ? "bg-blue-600 text-white" : "bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-                  }`}>
-                  Semana existente
-                </button>
-              )}
-              <button type="button" onClick={() => setSemanaMode("nueva")}
-                className={`px-3 py-1.5 text-sm font-medium transition-colors ${
-                  semanaMode === "nueva" ? "bg-blue-600 text-white" : "bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-                }`}>
-                Nueva semana
-              </button>
-            </div>
-            {semanaMode === "existente" ? (
-              <select value={semanaSeleccionada} onChange={(e) => setSemanaSeleccionada(e.target.value)}
-                className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm">
-                {semanas.map((s) => (
-                  <option key={s.semana_num} value={s.semana_num}>Sem {s.semana_num}: {s.semana_label}</option>
-                ))}
-              </select>
-            ) : (
-              <div className="flex items-center gap-3">
-                <input type="number" min="1" max="53" placeholder="# semana" value={nuevaSemanaNum}
-                  onChange={(e) => setNuevaSemanaNum(e.target.value)}
-                  className="w-28 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm" />
-                {nuevaSemanaNum && !isNaN(Number(nuevaSemanaNum)) && Number(nuevaSemanaNum) >= 1 && Number(nuevaSemanaNum) <= 53 && (
-                  <span className="text-sm font-medium text-blue-600 dark:text-blue-400">
-                    {generateWeekLabel(anio, Number(nuevaSemanaNum))}
-                  </span>
-                )}
-              </div>
-            )}
-          </div>
+          <select value={semanaSeleccionada} onChange={(e) => setSemanaSeleccionada(e.target.value)}
+            className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm">
+            {semanas.map((s) => (
+              <option key={s.semana_num} value={s.semana_num}>Sem {s.semana_num}: {s.semana_label}</option>
+            ))}
+          </select>
         </div>
 
         <div className="flex-1 overflow-auto">
@@ -364,8 +338,35 @@ export function CostosVariables() {
 
   useEffect(() => { fetchMatriz(anio); }, [anio]);
 
-  const semanas = matriz?.semanas ?? [];
-  const productos = matriz?.productos ?? [];
+  const semanas = useMemo(() => todasLasSemanas(anio, matriz?.semanas ?? []), [anio, matriz]);
+  const semanaActual = anio === getMonterreyYear() ? currentIsoWeek() : null;
+
+  // Carry each product's last captured value forward through the empty weeks
+  // (up to the current week; whole year when it's a past year).
+  const productos = useMemo(() => {
+    const limite = semanaActual ?? (anio < getMonterreyYear() ? 53 : 0);
+    return (matriz?.productos ?? []).map((p) => {
+      const costos: Record<number, CostoCelda> = {};
+      let ultima: CostoCelda | null = null;
+      for (const s of semanas) {
+        const c = p.costos[s.semana_num];
+        if (c && (c.precio != null || c.costo != null)) {
+          costos[s.semana_num] = c;
+          ultima = c;
+        } else if (ultima && s.semana_num <= limite) {
+          costos[s.semana_num] = { ...ultima, id: null, arrastrado: true };
+        }
+      }
+      return { ...p, costos };
+    });
+  }, [matriz, semanas, semanaActual, anio]);
+
+  // Bring the current week into view once the matrix renders.
+  useEffect(() => {
+    if (!loading && matriz && semanaActual != null) {
+      document.getElementById(`sem-${semanaActual}`)?.scrollIntoView({ inline: "center", block: "nearest" });
+    }
+  }, [loading, matriz, semanaActual]);
 
   return (
     <div className="flex flex-col h-full bg-gray-50 dark:bg-gray-900" style={{ minHeight: 0 }}>
@@ -389,7 +390,7 @@ export function CostosVariables() {
           </div>
           <button onClick={() => setShowNuevaSemana(true)}
             className="px-4 py-2 border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 text-sm font-medium text-gray-700 dark:text-gray-300 rounded-lg transition-colors">
-            + Nueva semana
+            + Capturar semana
           </button>
           <button onClick={() => fetchMatriz(anio)} disabled={loading}
             className="px-4 py-2 border border-blue-600 text-blue-600 hover:bg-blue-600 hover:text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50">
@@ -409,14 +410,7 @@ export function CostosVariables() {
           <p className="text-gray-400 text-sm">{error}</p>
         </div>
       )}
-      {!loading && !error && matriz && semanas.length === 0 && (
-        <div className="flex-1 flex flex-col items-center justify-center py-20 gap-2">
-          <p className="text-gray-500 dark:text-gray-400 text-lg">No hay semanas capturadas para {anio}</p>
-          <p className="text-gray-400 text-sm">Usa "+ Nueva semana" para comenzar.</p>
-        </div>
-      )}
-
-      {!loading && !error && matriz && semanas.length > 0 && (
+      {!loading && !error && matriz && (
         <div className="flex-1 overflow-auto mx-4 my-4 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm" style={{ minHeight: 0 }}>
           <table className="border-collapse min-w-max text-sm">
             <thead>
@@ -424,7 +418,7 @@ export function CostosVariables() {
                 <th className="sticky left-0 z-20 bg-gray-100 dark:bg-gray-700 border-b-2 border-r-2 border-gray-300 dark:border-gray-600 px-3 py-2 text-left text-xs text-gray-500 dark:text-gray-400 min-w-[3rem]">MOD</th>
                 <th className="sticky left-12 z-20 bg-gray-100 dark:bg-gray-700 border-b-2 border-r-2 border-gray-300 dark:border-gray-600 px-3 py-2 text-left text-xs text-gray-500 dark:text-gray-400 min-w-[14rem] max-w-[16rem]">Producto</th>
                 {semanas.map((s) => (
-                  <th key={s.semana_num} className="border-b-2 border-r border-gray-300 dark:border-gray-600 px-2 py-1 text-center text-xs font-semibold text-gray-700 dark:text-gray-300 min-w-[9.5rem] whitespace-nowrap">
+                  <th key={s.semana_num} id={`sem-${s.semana_num}`} className={`border-b-2 border-r border-gray-300 dark:border-gray-600 px-2 py-1 text-center text-xs font-semibold text-gray-700 dark:text-gray-300 min-w-[9.5rem] whitespace-nowrap ${s.semana_num === semanaActual ? "bg-blue-100 dark:bg-blue-900/40" : ""}`}>
                     Sem {s.semana_num}<br /><span className="font-normal text-gray-400">{s.semana_label}</span>
                   </th>
                 ))}
