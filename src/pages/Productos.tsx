@@ -13,7 +13,7 @@ import { getMonterreyDateISO } from "../lib/dateMx";
 
 const PAGE_SIZE = 20;
 const TABLE_GRID_COLUMNS =
-  "7rem minmax(0,3fr) minmax(0,1.5fr) minmax(0,2fr) minmax(0,1.2fr) minmax(0,1.2fr) minmax(0,1.2fr) minmax(0,1.2fr) minmax(0,1.5fr)";
+  "7rem minmax(12rem,3fr) minmax(6rem,1.2fr) minmax(7rem,1.2fr) minmax(9rem,2fr) minmax(6rem,1fr) minmax(9rem,1.3fr) minmax(9rem,1.3fr) minmax(6rem,1.2fr)";
 
 const ESTADO_LABELS: Record<string, string> = {
   activo: "Activo",
@@ -143,8 +143,8 @@ export function Productos() {
           typeof p.category === "object" ? p.category?.name ?? "" : p.category ?? "",
         "Peso (kg)": p.weight_kg,
         Stock: p.stock,
-        Precio: p.price,
-        Costo: p.cost,
+        "Precio (MXN)": p.price,
+        "Costo (USD)": p.cost,
         "Largo (cm)": p.dimensions_cm?.largo ?? "",
         "Ancho (cm)": p.dimensions_cm?.ancho ?? "",
         "Alto (cm)": p.dimensions_cm?.alto ?? "",
@@ -545,8 +545,8 @@ export function Productos() {
     { key: "estado", label: "Estado" },
     { key: "proveedor", label: "Proveedor" },
     { key: "stock", label: "Stock" },
-    { key: "price", label: "Precio" },
-    { key: "cost", label: "Costo" },
+    { key: "price", label: "Precio (MXN)" },
+    { key: "cost", label: "Costo (USD)" },
   ];
 
   return (
@@ -641,7 +641,7 @@ export function Productos() {
         )}
       </div>
 
-      <div className="flex-1 bg-white dark:bg-gray-800 mx-8 mt-4 border border-gray-400 dark:border-gray-700 overflow-hidden flex flex-col rounded-lg">
+      <div className="flex-1 bg-white dark:bg-gray-800 mx-8 mt-4 border border-gray-400 dark:border-gray-700 overflow-x-auto overflow-y-hidden flex flex-col rounded-lg">
         {/* Excel-style header row with grid lines */}
         <div
           className="grid [&>*]:min-w-0 bg-gray-100 dark:bg-gray-700 border-b-2 border-gray-400 dark:border-gray-600"
