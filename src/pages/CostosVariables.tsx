@@ -3,9 +3,10 @@
 // updates the product's official price/cost. Each row can open a small
 // time-series chart of its price/cost history.
 import { useState, useEffect, useMemo } from "react";
+import ExcelJS from "exceljs";
 import { useDarkMode } from "../context/DarkModeContext";
 import { fetchAPI } from "../lib/fetch";
-import { getMonterreyYear } from "../lib/dateMx";
+import { getMonterreyYear, getMonterreyDateISO } from "../lib/dateMx";
 
 interface Semana {
   semana_num: number;
@@ -322,6 +323,7 @@ export function CostosVariables() {
   const [error, setError] = useState<string | null>(null);
   const [showNuevaSemana, setShowNuevaSemana] = useState(false);
   const [grafica, setGrafica] = useState<{ mod: number; nombre: string } | null>(null);
+  const [exportLoading, setExportLoading] = useState(false);
 
   const fetchMatriz = async (a = anio) => {
     setLoading(true);
@@ -337,6 +339,47 @@ export function CostosVariables() {
   };
 
   useEffect(() => { fetchMatriz(anio); }, [anio]);
+
+  const handleExportExcel = async () => {
+    setExportLoading(true);
+    setError(null);
+    try {
+      const rows = productos.map((p) => {
+        const row: Record<string, unknown> = { MOD: p.mod, Producto: p.nombre_producto };
+        for (const s of semanas) {
+          const c = p.costos[s.semana_num];
+          row[`Sem ${s.semana_num} (${s.semana_label}) - Precio (MXN)`] = c?.precio ?? "";
+          row[`Sem ${s.semana_num} (${s.semana_label}) - Costo (USD)`] = c?.costo ?? "";
+        }
+        return row;
+      });
+
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet(`Costos ${anio}`);
+
+      if (rows.length > 0) {
+        worksheet.columns = Object.keys(rows[0]).map((key) => ({ header: key, key }));
+        worksheet.addRows(rows);
+      }
+
+      const date = getMonterreyDateISO();
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `costos_variables_${anio}_${date}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("Error exporting costos variables:", err);
+      setError(err instanceof Error ? err.message : "Error al exportar costos variables");
+    } finally {
+      setExportLoading(false);
+    }
+  };
 
   const semanas = useMemo(() => todasLasSemanas(anio, matriz?.semanas ?? []), [anio, matriz]);
   const semanaActual = anio === getMonterreyYear() ? currentIsoWeek() : null;
@@ -388,6 +431,10 @@ export function CostosVariables() {
               </button>
             ))}
           </div>
+          <button onClick={handleExportExcel} disabled={exportLoading || productos.length === 0}
+            className="px-4 py-2 border border-green-600 dark:border-green-500 text-green-700 dark:text-green-400 hover:bg-green-600 hover:text-white dark:hover:bg-green-500 dark:hover:text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+            {exportLoading ? "Exportando…" : "📊 Exportar Excel"}
+          </button>
           <button onClick={() => setShowNuevaSemana(true)}
             className="px-4 py-2 border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 text-sm font-medium text-gray-700 dark:text-gray-300 rounded-lg transition-colors">
             + Capturar semana
