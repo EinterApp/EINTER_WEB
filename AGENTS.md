@@ -43,6 +43,16 @@ Si agregas impresión de etiquetas en otra pantalla, reusa uno de estos tres pat
 
 Todo el árbol Ubicación→Master QR→Sub-QR de esta página usa `sampleData` hardcodeado en el propio archivo — no llama a ningún endpoint, no refleja la BD real. El único bloque real en esta página es `TarimaBarcodeSearch` (agregado 2026-08-10, arriba del header del árbol mock), que sí habla con el backend. Si vas a conectar el resto de la página a datos reales, probablemente quieras generalizar ese mismo patrón a islas/tarimas reales en vez de mantener `sampleData`.
 
+## Limpieza final 2026-09-23
+
+Pase de cierre del proyecto: se borraron `src/components/VentaModal.tsx` (sin importers; era un modal viejo de venta manual, distinto de `VentaDetailModal.tsx` ya borrado en 2026-08-10), `src/App.css` (no se importaba, superado por Tailwind/`index.css`), `src/assets/react.svg` (no referenciado) y `public/404.html` junto con el script de redirect inline en `index.html` que lo acompañaba (truco de SPA para GitHub Pages — el deploy real es Vercel, ver `vercel.json`, no aplica).
+
+`src/components/LogoutButton.tsx` tenía 0 importers y ahora está en uso: se le agregaron props `className`/`children`/`onLoggedOut` y `NavBar.tsx` lo importa en el dropdown del ícono de perfil (esquina superior derecha) en vez de reimplementar su propio `onClick` con `logout()` de `AuthContext` — la lógica de sign-out vive en un solo lugar.
+
+`src/components/UnderConstruction.tsx` se deja intacto a propósito aunque tiene 0 importers hoy — utilidad reusable para features futuras, no borrar.
+
+`PDF_Implementation.txt` (raíz) quedó desactualizado: documenta `components/ReciboModal.tsx`, que ya no existe (borrado 2026-08-10, ver arriba). No se borró el archivo, pero es nota vieja, no documentación vigente — no confiar en él para features de PDF nuevas (ver el patrón real en `Entradas.tsx`/`THDComparativo.tsx` mencionado arriba).
+
 ## Antes de tocar algo, ten en cuenta
 
 - `EinterBodegaApp` (Android) es un cliente separado del mismo backend, y hoy está desincronizado en varios endpoints. Un cambio aquí que además debería aplicar a mobile no se propaga solo — hay que replicarlo a mano (ver `../EinterBodegaApp/AGENTS.md`).
