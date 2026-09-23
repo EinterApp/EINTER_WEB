@@ -67,6 +67,11 @@ This project uses Tailwind CSS v4 with the new `@tailwindcss/postcss` plugin. Th
 BodegaEinterApp/
 ├── src/
 │   ├── assets/       # Static assets
+│   ├── components/   # Reusable UI components (modals, NavBar, Sidebar, etc.)
+│   ├── context/      # React context providers (auth, dark mode)
+│   ├── hooks/        # Shared custom hooks
+│   ├── lib/          # API clients, Firebase setup, and domain helpers
+│   ├── pages/        # Top-level route/page components
 │   ├── App.tsx       # Main App component
 │   ├── main.tsx      # Application entry point
 │   └── index.css     # Global styles with Tailwind directives

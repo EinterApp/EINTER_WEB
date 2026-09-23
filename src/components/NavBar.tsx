@@ -2,13 +2,14 @@
 import { useState, useRef, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { useDarkMode } from '../context/DarkModeContext'
+import LogoutButton from './LogoutButton'
 
 interface NavbarProps {
   onNavigateToProfile: () => void
 }
 
 export function Navbar({ onNavigateToProfile }: NavbarProps) {
-  const { user, logout } = useAuth()
+  const { user } = useAuth()
   const { darkMode } = useDarkMode()
   const [showProfileMenu, setShowProfileMenu] = useState(false)
   const profileMenuRef = useRef<HTMLDivElement>(null)
@@ -144,14 +145,8 @@ export function Navbar({ onNavigateToProfile }: NavbarProps) {
                       darkMode ? 'border-gray-700' : 'border-gray-200'
                     }`}
                   >
-                    <button
-                      onClick={async () => {
-                        try {
-                          await logout();
-                        } catch (error) {
-                          console.error("Error signing out:", error);
-                        }
-                      }}
+                    <LogoutButton
+                      onLoggedOut={() => setShowProfileMenu(false)}
                       className={`w-full text-left px-4 py-3 transition-all flex items-center gap-3 ${
                         darkMode
                           ? 'hover:bg-red-900 hover:bg-opacity-30 text-red-400'
@@ -160,7 +155,7 @@ export function Navbar({ onNavigateToProfile }: NavbarProps) {
                     >
                       <span className="text-lg">🚪</span>
                       <span className="font-medium">Cerrar Sesión</span>
-                    </button>
+                    </LogoutButton>
                   </div>
                 </div>
               </div>
