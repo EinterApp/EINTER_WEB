@@ -9,6 +9,12 @@ npm install
 npm run dev   # Vite, puerto 5173
 ```
 
+## Bug: editar un producto podía "no guardar" (corregido 2026-10-02)
+
+Reporte de usuaria: edita un producto, guarda, y la ficha sigue mostrando los datos viejos. Causa: `openEditModal` en `Productos.tsx` abría el modal **instantáneamente** con el item de la lista (que no trae `category`, por eso existe un segundo fetch a `GET /api/productos?id=` para completarlo) y luego, cuando ese fetch resolvía en segundo plano, volvía a hacer `setSelectedProduct(...)` con los datos frescos — lo cual re-disparaba el `useEffect` de `ProductModal.tsx` que repuebla `formData` desde `product`. Si la usuaria ya había empezado a escribir antes de que ese segundo fetch resolviera, su edición se pisaba silenciosamente con los datos (sin cambios) del servidor, y al día siguiente guardaba exactamente lo mismo que ya había — sin ningún error, porque técnicamente no hubo conflicto de `updated_at`, solo se perdió la edición antes de llegar al PUT.
+
+Fix: `openEditModal` ahora espera (`await`) el fetch de `GET /api/productos?id=` **antes** de mostrar el modal, en vez de abrirlo con datos viejos y refrescarlo por debajo. El botón "Editar" se deshabilita (muestra "...") mientras carga, vía el nuevo estado `editLoadingId`. Ya no hay una segunda escritura a `selectedProduct` después de que el modal es visible, así que no hay ventana para que un fetch en segundo plano pise lo que la usuaria está escribiendo.
+
 ## Roles simplificados a 2 (2026-10-01)
 
 `src/lib/roles.ts` (`USER_ROLES`/`ROLE_HIERARCHY`/`ROLE_LABELS`) ya solo tiene `superadmin` y `empleado` — se quitaron `owner`/`admin`/`secretaria`/`trabajador`, que existían en el código pero nunca se usaron en producción (todos los usuarios reales ya estaban en superadmin o empleado). `src/lib/rolePermissions.ts` sigue dando acceso total a ambos roles a nivel de módulo (la restricción real vive en el backend, ver `EINTER_API/AGENTS.md`). `RoleGuard.tsx` no cambió — ya usaba el booleano `requireSuperAdmin`, no nombres de rol intermedios.

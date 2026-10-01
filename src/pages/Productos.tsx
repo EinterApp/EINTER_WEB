@@ -100,6 +100,7 @@ export function Productos() {
   const [modalVisible, setModalVisible] = useState(false);
   const [modalMode, setModalMode] = useState<"create" | "edit">("create");
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [editLoadingId, setEditLoadingId] = useState<number | null>(null);
 
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
   const [productToDelete, setProductToDelete] = useState<Product | null>(null);
@@ -511,17 +512,30 @@ export function Productos() {
   };
 
   const openEditModal = async (product: Product) => {
-    setModalMode("edit");
-    setSelectedProduct(product);
-    setModalVisible(true);
+    // Fetch fresh data BEFORE showing the modal (instead of opening instantly with
+    // the possibly-stale list item and overwriting it underneath the user once the
+    // fetch resolved): opening first and refreshing in the background raced with
+    // typing — if the user edited a field before the background fetch landed, the
+    // refresh silently reset the form, so a "saved" edit could end up sending back
+    // the original, unchanged values. See AGENTS.md for the user report this fixes.
+    setEditLoadingId(product.id ?? null);
     try {
       const raw = (await fetchAPI(`/(api)/productos?id=${product.id}`)) as Record<string, unknown>;
+      setModalMode("edit");
       setSelectedProduct({
         ...(raw as unknown as Product),
         china_sku: raw.sku_china != null ? String(raw.sku_china) : null,
       });
+      setModalVisible(true);
     } catch (err) {
-      console.warn("No se pudo refrescar el producto antes de editar:", err);
+      console.error("No se pudo cargar el producto para editar:", err);
+      setError(
+        err instanceof Error
+          ? err.message
+          : "No se pudo cargar el producto para editar"
+      );
+    } finally {
+      setEditLoadingId(null);
     }
   };
 
@@ -776,9 +790,10 @@ export function Productos() {
                 <div className="flex-[1.5] py-2 px-2 flex justify-center items-center flex-row gap-2">
                   <button
                     onClick={() => openEditModal(product)}
-                    className="px-3 py-1.5 bg-blue-500 rounded hover:bg-blue-600 text-white text-xs font-robotoMedium"
+                    disabled={editLoadingId === product.id}
+                    className="px-3 py-1.5 bg-blue-500 rounded hover:bg-blue-600 disabled:opacity-50 disabled:cursor-wait text-white text-xs font-robotoMedium"
                   >
-                    Editar
+                    {editLoadingId === product.id ? "..." : "Editar"}
                   </button>
                 </div>
               </div>
