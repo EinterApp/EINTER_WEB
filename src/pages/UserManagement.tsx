@@ -122,14 +122,6 @@ export function UserManagement() {
     switch (role) {
       case USER_ROLES.SUPERADMIN:
         return 'bg-purple-500 text-white';
-      case USER_ROLES.OWNER:
-        return 'bg-red-500 text-white';
-      case USER_ROLES.ADMIN:
-        return 'bg-blue-500 text-white';
-      case USER_ROLES.SECRETARIA:
-        return 'bg-pink-500 text-white';
-      case USER_ROLES.TRABAJADOR:
-        return 'bg-green-500 text-white';
       case USER_ROLES.EMPLEADO:
         return 'bg-gray-500 text-white';
       default:
