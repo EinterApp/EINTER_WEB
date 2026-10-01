@@ -9,6 +9,10 @@ npm install
 npm run dev   # Vite, puerto 5173
 ```
 
+## Roles simplificados a 2 (2026-10-01)
+
+`src/lib/roles.ts` (`USER_ROLES`/`ROLE_HIERARCHY`/`ROLE_LABELS`) ya solo tiene `superadmin` y `empleado` — se quitaron `owner`/`admin`/`secretaria`/`trabajador`, que existían en el código pero nunca se usaron en producción (todos los usuarios reales ya estaban en superadmin o empleado). `src/lib/rolePermissions.ts` sigue dando acceso total a ambos roles a nivel de módulo (la restricción real vive en el backend, ver `EINTER_API/AGENTS.md`). `RoleGuard.tsx` no cambió — ya usaba el booleano `requireSuperAdmin`, no nombres de rol intermedios.
+
 `.env` necesita `VITE_API_BASE_URL` apuntando al backend (`http://localhost:3000` en dev).
 
 ## Dos clientes HTTP coexisten — usa `fetchAPI`, no `api.*`
