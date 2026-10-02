@@ -230,6 +230,7 @@ export function Entradas() {
   ]);
   const [createLoading, setCreateLoading] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+  const [editLoadingFolio, setEditLoadingFolio] = useState<string | null>(null);
 
   // Delete confirmation state
   const [deleteFolio, setDeleteFolio] = useState<string | null>(null);
@@ -428,16 +429,20 @@ export function Entradas() {
   };
 
   const handleOpenEdit = async (folio: string) => {
-    setEditFolio(folio);
-    setCreateFolio(folio);
+    // Fetch fresh data BEFORE showing the modal, instead of opening it instantly
+    // and filling fields in once the fetch resolved: that raced with typing — an
+    // edit made before the fetch landed got silently overwritten by the (unchanged)
+    // server data, so "guardar" appeared to do nothing. Same fix as Productos.tsx's
+    // openEditModal (see its AGENTS.md entry for the original report).
+    setEditLoadingFolio(folio);
     setCreateError(null);
-    setCreateVisible(true);
-    setCreateLoading(true);
     loadSkuCatalog();
     try {
       const raw = (await fetchAPI(
         `/api/contenedores/${encodeURIComponent(folio)}`
       )) as ContenedorDetail;
+      setEditFolio(folio);
+      setCreateFolio(folio);
       setCreateTamano(raw.tamano || "");
       setCreateFecha((raw.fecha || "").slice(0, 10) || todayISO());
       setCreateFechaPedido((raw.fecha_pedido || "").slice(0, 10));
@@ -451,10 +456,16 @@ export function Entradas() {
             }))
           : [{ master_sku: "", cantidad: "1" }]
       );
+      setCreateVisible(true);
     } catch (err) {
+      // Still open the modal so the error is visible (createError only renders
+      // inside it), just without pre-filled data to edit.
+      setEditFolio(folio);
+      setCreateFolio(folio);
+      setCreateVisible(true);
       setCreateError((err as Error).message);
     } finally {
-      setCreateLoading(false);
+      setEditLoadingFolio(null);
     }
   };
 
@@ -1132,10 +1143,11 @@ export function Entradas() {
                             e.stopPropagation();
                             handleOpenEdit(row.folio_orden);
                           }}
-                          className="inline-flex items-center justify-center w-7 h-7 rounded text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors text-sm"
+                          disabled={editLoadingFolio === row.folio_orden}
+                          className="inline-flex items-center justify-center w-7 h-7 rounded text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors text-sm disabled:opacity-50 disabled:cursor-wait"
                           title={`Editar orden — botada ${row.veces_rechazado ?? 0} veces`}
                         >
-                          ✏️
+                          {editLoadingFolio === row.folio_orden ? "…" : "✏️"}
                         </button>
                         {(row.veces_rechazado ?? 0) > 0 && (
                           <span className="text-[10px] text-red-500 dark:text-red-400 font-semibold" title="Veces botada">
@@ -1163,10 +1175,11 @@ export function Entradas() {
                             e.stopPropagation();
                             handleOpenEdit(row.folio_orden);
                           }}
-                          className="inline-flex items-center justify-center w-7 h-7 rounded text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors text-sm"
+                          disabled={editLoadingFolio === row.folio_orden}
+                          className="inline-flex items-center justify-center w-7 h-7 rounded text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors text-sm disabled:opacity-50 disabled:cursor-wait"
                           title="Editar orden"
                         >
-                          ✏️
+                          {editLoadingFolio === row.folio_orden ? "…" : "✏️"}
                         </button>
                         <button
                           onClick={(e) => {

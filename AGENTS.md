@@ -15,6 +15,13 @@ Reporte de usuaria: edita un producto, guarda, y la ficha sigue mostrando los da
 
 Fix: `openEditModal` ahora espera (`await`) el fetch de `GET /api/productos?id=` **antes** de mostrar el modal, en vez de abrirlo con datos viejos y refrescarlo por debajo. El botón "Editar" se deshabilita (muestra "...") mientras carga, vía el nuevo estado `editLoadingId`. Ya no hay una segunda escritura a `selectedProduct` después de que el modal es visible, así que no hay ventana para que un fetch en segundo plano pise lo que la usuaria está escribiendo.
 
+## Más bugs latentes corregidos (auditoría 2026-10-02)
+
+- **`Entradas.tsx` `handleOpenEdit` tenía el mismo bug que `Productos.tsx`** (ver arriba): abría el modal de inmediato con campos vacíos/viejos y los llenaba después de un `await fetchAPI(/api/contenedores/${folio})`, sin ningún `disabled` en los inputs mientras tanto — editar un campo antes de que ese fetch resolviera se perdía en silencio. Mismo fix: ahora espera el fetch antes de abrir el modal (nuevo estado `editLoadingFolio`, deshabilita el botón ✏️ mientras carga). Si el fetch falla, el modal sí se abre (sin datos) para mostrar el error, ya que `createError` solo se renderiza dentro del modal.
+- **`Salidas.tsx` "Confirmar"/"Botar" tragaban el error en silencio** (`catch {}` vacío, con un comentario que literalmente decía "toast pattern not present in this page"). Si el `PATCH` fallaba, el botón solo dejaba de girar sin avisar nada — el usuario creía que había funcionado. Se le agregó el mismo patrón de toast que ya usa `Entradas.tsx` (estado `toast`, auto-dismiss a 3.5s, notificación verde/roja abajo a la derecha).
+
+Pendiente, no resuelto en esta pasada: solo `Productos.tsx` tiene el chequeo de conflicto por `updated_at` — `Categorias.tsx`, `Proveedores.tsx` y los flujos de Entradas/Salidas no lo tienen, así que dos personas editando lo mismo a la vez se pisan sin aviso. No se tocó porque requiere decidir primero si vale la pena extender el patrón a esos dominios (y confirmar que el backend lo soporta en cada uno) antes de implementarlo.
+
 ## Roles simplificados a 2 (2026-10-01)
 
 `src/lib/roles.ts` (`USER_ROLES`/`ROLE_HIERARCHY`/`ROLE_LABELS`) ya solo tiene `superadmin` y `empleado` — se quitaron `owner`/`admin`/`secretaria`/`trabajador`, que existían en el código pero nunca se usaron en producción (todos los usuarios reales ya estaban en superadmin o empleado). `src/lib/rolePermissions.ts` sigue dando acceso total a ambos roles a nivel de módulo (la restricción real vive en el backend, ver `EINTER_API/AGENTS.md`). `RoleGuard.tsx` no cambió — ya usaba el booleano `requireSuperAdmin`, no nombres de rol intermedios.
