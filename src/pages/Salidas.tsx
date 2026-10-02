@@ -686,6 +686,18 @@ export function Salidas() {
   const [confirmandoFolio, setConfirmandoFolio] = useState<string | null>(null);
   const [botandoFolio, setBotandoFolio] = useState<string | null>(null);
 
+  // Toast state (same pattern as Entradas.tsx)
+  const [toast, setToast] = useState<{ ok: boolean; text: string } | null>(
+    null
+  );
+
+  // Auto-dismiss toast after 3.5 s
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 3500);
+    return () => clearTimeout(t);
+  }, [toast]);
+
   const fetchSalidas = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -754,9 +766,10 @@ export function Salidas() {
     setConfirmandoFolio(folio);
     try {
       await fetchAPI(`/api/thd/salidas/${encodeURIComponent(folio)}/confirmar`, { method: "PATCH" });
+      setToast({ ok: true, text: `Salida "${folio}" confirmada.` });
       fetchSalidas();
-    } catch {
-      /* toast pattern not present in this page; silently retry via table refresh */
+    } catch (err) {
+      setToast({ ok: false, text: (err as Error).message });
     } finally {
       setConfirmandoFolio(null);
     }
@@ -766,9 +779,10 @@ export function Salidas() {
     setBotandoFolio(folio);
     try {
       await fetchAPI(`/api/thd/salidas/${encodeURIComponent(folio)}/botar`, { method: "PATCH" });
+      setToast({ ok: true, text: `Salida "${folio}" botada de vuelta a borrador.` });
       fetchSalidas();
-    } catch {
-      /* ignore */
+    } catch (err) {
+      setToast({ ok: false, text: (err as Error).message });
     } finally {
       setBotandoFolio(null);
     }
@@ -1037,6 +1051,27 @@ export function Salidas() {
                 ) : "Eliminar"}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Toast notification ──────────────────────────────────────────────── */}
+      {toast && (
+        <div
+          className={`fixed bottom-6 right-6 z-50 max-w-sm w-full p-4 rounded-lg shadow-lg border animate-fade-in ${
+            toast.ok
+              ? "bg-green-50 dark:bg-green-900/80 border-green-300 dark:border-green-600 text-green-800 dark:text-green-200"
+              : "bg-red-50 dark:bg-red-900/80 border-red-300 dark:border-red-600 text-red-800 dark:text-red-200"
+          }`}
+        >
+          <div className="flex items-start justify-between gap-3">
+            <span className="font-robotoRegular text-sm">{toast.text}</span>
+            <button
+              onClick={() => setToast(null)}
+              className="text-current opacity-60 hover:opacity-100 text-xs leading-none shrink-0 mt-0.5"
+            >
+              ✕
+            </button>
           </div>
         </div>
       )}
