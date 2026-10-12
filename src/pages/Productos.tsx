@@ -380,6 +380,7 @@ export function Productos() {
         master_sku: productData.sku || "",
         sku_china: productData.china_sku || null,
         nombre_producto: productData.name || "",
+        estado: productData.estado || "activo",
         foto: productData.photo || null,
         largo_cm: productData.dimensions_cm?.largo || 0,
         ancho_cm: productData.dimensions_cm?.ancho || 0,
@@ -433,6 +434,7 @@ export function Productos() {
         apiData.sku_china = productData.china_sku;
       if (productData.name !== undefined)
         apiData.nombre_producto = productData.name;
+      if (productData.estado !== undefined) apiData.estado = productData.estado;
       if (productData.photo !== undefined) apiData.foto = productData.photo;
       if (productData.dimensions_cm?.largo !== undefined)
         apiData.largo_cm = productData.dimensions_cm.largo;
