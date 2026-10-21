@@ -347,6 +347,13 @@ function SalidaFormModal({
   const [articulos, setArticulos] = useState<ArticuloAC[]>([]);
   const [reviewEstado, setReviewEstado] = useState<EstadoOrden | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const errorRef = useRef<HTMLParagraphElement>(null);
+
+  // The form body scrolls; without this a save error rendered below the fold looks like
+  // "the button did nothing".
+  useEffect(() => {
+    if (formError) errorRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [formError]);
 
   useEffect(() => {
     fetchAPI("/api/thd/articulos")
@@ -557,7 +564,7 @@ function SalidaFormModal({
             )}
           </div>
 
-          {formError && <p className="text-sm text-red-600 dark:text-red-400">{formError}</p>}
+          {formError && <p ref={errorRef} role="alert" className="text-sm font-medium text-red-600 dark:text-red-400">{formError}</p>}
         </div>
 
         {/* Footer */}
