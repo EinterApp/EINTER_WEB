@@ -73,6 +73,423 @@ function newProductoRow(): ProductoFormRow {
   return { id: crypto.randomUUID(), master_sku: "", sku_thd: "", cantidad: "", nombre_producto: "", en_catalogo: false };
 }
 
+// ─── Factura al cliente (Odoo) ────────────────────────────────────────────────
+
+interface FacturaLinea {
+  master_sku: string;
+  sku_thd: string | null;
+  nombre_producto: string | null;
+  cantidad: number;
+  precio_unitario: number;
+}
+
+interface FacturaSalidaData {
+  estado_salida: EstadoOrden | undefined;
+  factura: {
+    cliente_odoo_id: number;
+    cliente_nombre: string | null;
+    uso_cfdi: string;
+    metodo_pago: "PUE" | "PPD";
+    forma_pago_odoo_id: number | null;
+    plazo_pago_odoo_id: number | null;
+    moneda: string;
+    impuesto_pct: number | string;
+    notas: string | null;
+    estado: string;
+    odoo_name: string | null;
+    odoo_sync_error: string | null;
+    motivo_rechazo?: string | null;
+  } | null;
+  lineas: FacturaLinea[];
+}
+
+interface FacturaRevision {
+  motivo_rechazo: string | null;
+  advertencias: string[];
+  odoo: {
+    state: string;
+    cliente: string | null;
+    moneda: string | null;
+    fecha: string | null;
+    plazo_pago: string | null;
+    uso_cfdi: string | false;
+    metodo_pago: string | false;
+    forma_pago: string | null;
+    subtotal: number;
+    impuestos: number;
+    total: number;
+    lineas: { id: number; name: string; quantity: number; price_unit: number; price_subtotal: number; price_total: number }[];
+  };
+}
+
+interface FacturaCatalogos {
+  usos_cfdi: { codigo: string; nombre: string }[];
+  metodos_pago: { codigo: string; nombre: string }[];
+  formas_pago: { id: number; name: string; code: string }[];
+  plazos_pago: { id: number; name: string }[];
+  monedas: string[];
+  impuestos: number[];
+}
+
+const FACTURA_ESTADOS: Record<string, string> = {
+  sin_enviar: "Sin enviar",
+  borrador_odoo: "Borrador en Odoo",
+  en_revision: "En revisión",
+  aprobada: "Aprobada",
+  timbrada: "Timbrada",
+  rechazada: "Rechazada",
+  error: "Error",
+};
+
+function FacturaModal({ folio, onClose, onToast }: {
+  folio: string;
+  onClose: () => void;
+  onToast: (t: { ok: boolean; text: string }) => void;
+}) {
+  const [data, setData] = useState<FacturaSalidaData | null>(null);
+  const [clientes, setClientes] = useState<{ id: number; name: string; vat?: string | false }[]>([]);
+  const [cat, setCat] = useState<FacturaCatalogos | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const { isSuperAdmin } = useRole();
+  const [revision, setRevision] = useState<FacturaRevision | null>(null);
+  const [rechazando, setRechazando] = useState(false);
+  const [motivo, setMotivo] = useState("");
+
+  const [clienteId, setClienteId] = useState("");
+  const [uso, setUso] = useState("G01");
+  const [metodo, setMetodo] = useState<"PUE" | "PPD">("PUE");
+  const [forma, setForma] = useState("");
+  const [plazo, setPlazo] = useState("");
+  const [moneda, setMoneda] = useState("MXN");
+  const [iva, setIva] = useState("16");
+  const [notas, setNotas] = useState("");
+  const [precios, setPrecios] = useState<Record<string, string>>({});
+
+  const base = `/api/facturas-cliente`;
+
+  const applyData = (d: FacturaSalidaData) => {
+    setData(d);
+    const f = d.factura;
+    if (f) {
+      setClienteId(String(f.cliente_odoo_id));
+      setUso(f.uso_cfdi);
+      setMetodo(f.metodo_pago);
+      setForma(f.forma_pago_odoo_id ? String(f.forma_pago_odoo_id) : "");
+      setPlazo(f.plazo_pago_odoo_id ? String(f.plazo_pago_odoo_id) : "");
+      setMoneda(f.moneda);
+      setIva(String(Number(f.impuesto_pct)));
+      setNotas(f.notas ?? "");
+    }
+    setPrecios(Object.fromEntries(d.lineas.map((l) => [l.master_sku, String(l.precio_unitario)])));
+    const est = d.factura?.estado;
+    if (est === "en_revision" || est === "aprobada") {
+      fetchAPI(`${base}/salidas/${encodeURIComponent(folio)}/revision`)
+        .then((r) => setRevision(r as FacturaRevision))
+        .catch((err: Error) => setError(err.message));
+    } else {
+      setRevision(null);
+    }
+  };
+
+  useEffect(() => {
+    setLoading(true);
+    setError(null);
+    Promise.all([
+      fetchAPI(`${base}/salidas/${encodeURIComponent(folio)}`),
+      fetchAPI(`${base}/clientes`),
+      fetchAPI(`${base}/catalogos`),
+    ])
+      .then(([d, c, k]) => {
+        applyData(d as FacturaSalidaData);
+        setClientes(c as typeof clientes);
+        setCat(k as FacturaCatalogos);
+      })
+      .catch((err: Error) => setError(err.message))
+      .finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [folio]);
+
+  const estado = data?.factura?.estado ?? "sin_enviar";
+  const locked = ["en_revision", "aprobada", "timbrada"].includes(estado);
+  const total = (data?.lineas ?? []).reduce(
+    (s, l) => s + l.cantidad * (Number(precios[l.master_sku]) || 0), 0);
+
+  const decidir = async (accion: "aprobar" | "rechazar") => {
+    setBusy(true);
+    setError(null);
+    try {
+      const d = (await fetchAPI(`${base}/salidas/${encodeURIComponent(folio)}/${accion}`, {
+        method: "POST",
+        body: JSON.stringify(accion === "rechazar" ? { motivo } : {}),
+      })) as FacturaSalidaData;
+      onToast({ ok: true, text: accion === "aprobar" ? "Factura aprobada." : "Factura rechazada y devuelta a captura." });
+      setRechazando(false);
+      setMotivo("");
+      applyData(d);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const payload = () => ({
+    cliente_odoo_id: Number(clienteId),
+    cliente_nombre: clientes.find((c) => String(c.id) === clienteId)?.name ?? null,
+    uso_cfdi: uso,
+    metodo_pago: metodo,
+    forma_pago_odoo_id: forma ? Number(forma) : null,
+    plazo_pago_odoo_id: plazo ? Number(plazo) : null,
+    moneda,
+    impuesto_pct: Number(iva),
+    notas: notas.trim() || null,
+    lineas: (data?.lineas ?? []).map((l) => ({
+      master_sku: l.master_sku, precio_unitario: Number(precios[l.master_sku]) || 0,
+    })),
+  });
+
+  const run = async (enviar: boolean) => {
+    setBusy(true);
+    setError(null);
+    try {
+      let d = (await fetchAPI(`${base}/salidas/${encodeURIComponent(folio)}`, {
+        method: "PUT", body: JSON.stringify(payload()),
+      })) as FacturaSalidaData;
+      if (enviar) {
+        d = (await fetchAPI(`${base}/salidas/${encodeURIComponent(folio)}/enviar`, { method: "POST" })) as FacturaSalidaData;
+        onToast({ ok: true, text: `Borrador de factura enviado a Odoo (${d.factura?.odoo_name ?? folio}).` });
+      } else {
+        onToast({ ok: true, text: "Borrador de factura guardado." });
+      }
+      applyData(d);
+    } catch (err) {
+      setError((err as Error).message);
+      // The failed push leaves the error on the row; reload to show state.
+      fetchAPI(`${base}/salidas/${encodeURIComponent(folio)}`).then((d) => applyData(d as FacturaSalidaData)).catch(() => {});
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const input = "w-full px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm disabled:opacity-60";
+  const label = "block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1";
+  const canSend = !!clienteId && data?.estado_salida === "confirmado" && !locked && !busy;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
+      <div
+        className="bg-white dark:bg-gray-800 rounded-lg shadow-2xl w-full max-w-3xl mx-4 max-h-[90vh] flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+          <div>
+            <h2 className="text-xl font-bold text-gray-900 dark:text-white">Factura · Folio {folio}</h2>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+              Estado: <span className="font-semibold">{FACTURA_ESTADOS[estado] ?? estado}</span>
+              {data?.factura?.odoo_name ? ` · Odoo ${data.factura.odoo_name}` : ""}
+            </p>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-2xl leading-none px-1">×</button>
+        </div>
+
+        <div className="flex-1 overflow-auto px-6 py-4 space-y-4">
+          {loading ? (
+            <p className="text-center text-gray-500 py-12 text-sm">Cargando…</p>
+          ) : !data || !cat ? (
+            <p className="text-center text-red-500 py-12 text-sm">{error ?? "No se pudo cargar"}</p>
+          ) : (
+            <>
+              {data.estado_salida !== "confirmado" && (
+                <div className="px-3 py-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded text-xs text-amber-700 dark:text-amber-400">
+                  La salida debe estar confirmada para enviar la factura a Odoo. Puedes guardar los datos mientras tanto.
+                </div>
+              )}
+              {error && (
+                <div className="px-3 py-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded text-xs text-red-700 dark:text-red-400">
+                  {error}
+                </div>
+              )}
+              {estado === "rechazada" && data.factura?.motivo_rechazo && (
+                <div className="px-3 py-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded text-xs text-red-700 dark:text-red-400">
+                  Rechazada por el SuperAdmin: {data.factura.motivo_rechazo}
+                </div>
+              )}
+              {revision && (
+                <div className="border border-blue-200 dark:border-blue-700 rounded-lg p-4 bg-blue-50/50 dark:bg-blue-900/10 space-y-2">
+                  <h3 className="text-sm font-bold text-gray-900 dark:text-white">Revisión — así quedó en Odoo</h3>
+                  {revision.advertencias.map((a) => (
+                    <p key={a} className="text-xs text-amber-700 dark:text-amber-400">⚠ {a}</p>
+                  ))}
+                  <p className="text-xs text-gray-600 dark:text-gray-400">
+                    {revision.odoo.cliente} · {revision.odoo.moneda} · {revision.odoo.fecha ?? "sin fecha"} · Uso {revision.odoo.uso_cfdi || "—"} · {revision.odoo.metodo_pago || "—"} · Forma: {revision.odoo.forma_pago ?? "—"} · Plazo: {revision.odoo.plazo_pago ?? "—"}
+                  </p>
+                  <table className="w-full text-xs">
+                    <tbody>
+                      {revision.odoo.lineas.map((l) => (
+                        <tr key={l.id} className="border-b border-blue-100 dark:border-blue-900/40">
+                          <td className="py-1 pr-2 text-gray-800 dark:text-gray-200">{l.name}</td>
+                          <td className="py-1 pr-2 text-right">{l.quantity}</td>
+                          <td className="py-1 pr-2 text-right">{l.price_unit.toLocaleString("es-MX", { minimumFractionDigits: 2 })}</td>
+                          <td className="py-1 text-right font-medium">{l.price_subtotal.toLocaleString("es-MX", { minimumFractionDigits: 2 })}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <div className="text-right text-sm text-gray-900 dark:text-white">
+                    <div>Subtotal: {revision.odoo.subtotal.toLocaleString("es-MX", { minimumFractionDigits: 2 })}</div>
+                    <div>IVA: {revision.odoo.impuestos.toLocaleString("es-MX", { minimumFractionDigits: 2 })}</div>
+                    <div className="font-bold">Total: {revision.odoo.total.toLocaleString("es-MX", { minimumFractionDigits: 2 })} {revision.odoo.moneda}</div>
+                  </div>
+                  {estado === "en_revision" && !isSuperAdmin && (
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Esperando la aprobación de un SuperAdmin.</p>
+                  )}
+                  {estado === "en_revision" && isSuperAdmin && (
+                    rechazando ? (
+                      <div className="space-y-2">
+                        <textarea className={input} rows={2} placeholder="Motivo del rechazo" value={motivo} onChange={(e) => setMotivo(e.target.value)} />
+                        <div className="flex justify-end gap-2">
+                          <button onClick={() => setRechazando(false)} className="px-3 py-1.5 rounded text-sm bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200">Cancelar</button>
+                          <button onClick={() => decidir("rechazar")} disabled={busy || !motivo.trim()} className="px-3 py-1.5 rounded text-sm bg-red-600 text-white hover:bg-red-700 disabled:opacity-50">Confirmar rechazo</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex justify-end gap-2">
+                        <button onClick={() => setRechazando(true)} disabled={busy} className="px-3 py-1.5 rounded text-sm bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 hover:bg-red-200 disabled:opacity-50">Rechazar</button>
+                        <button onClick={() => decidir("aprobar")} disabled={busy || revision.advertencias.length > 0} className="px-3 py-1.5 rounded text-sm bg-green-600 text-white hover:bg-green-700 disabled:opacity-50">Aprobar</button>
+                      </div>
+                    )
+                  )}
+                  {estado === "aprobada" && (
+                    <p className="text-xs text-green-700 dark:text-green-400">Aprobada. El timbrado y el PDF final llegan en la siguiente fase.</p>
+                  )}
+                </div>
+              )}
+              {!error && data.factura?.odoo_sync_error && (
+                <div className="px-3 py-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded text-xs text-red-700 dark:text-red-400">
+                  Último error de Odoo: {data.factura.odoo_sync_error}
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="col-span-2">
+                  <label className={label}>Cliente (Odoo)</label>
+                  <select className={input} value={clienteId} disabled={locked} onChange={(e) => setClienteId(e.target.value)}>
+                    <option value="">Selecciona…</option>
+                    {clientes.map((c) => (
+                      <option key={c.id} value={c.id}>{c.name}{c.vat ? ` · ${c.vat}` : ""}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className={label}>Uso del CFDI</label>
+                  <select className={input} value={uso} disabled={locked} onChange={(e) => setUso(e.target.value)}>
+                    {cat.usos_cfdi.map((u) => <option key={u.codigo} value={u.codigo}>{u.codigo} · {u.nombre}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className={label}>Método de pago</label>
+                  <select className={input} value={metodo} disabled={locked} onChange={(e) => setMetodo(e.target.value as "PUE" | "PPD")}>
+                    {cat.metodos_pago.map((m) => <option key={m.codigo} value={m.codigo}>{m.nombre}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className={label}>Forma de pago</label>
+                  <select className={input} value={forma} disabled={locked} onChange={(e) => setForma(e.target.value)}>
+                    <option value="">(la del cliente en Odoo)</option>
+                    {cat.formas_pago.map((f) => <option key={f.id} value={f.id}>{f.code} · {f.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className={label}>Plazo de pago</label>
+                  <select className={input} value={plazo} disabled={locked} onChange={(e) => setPlazo(e.target.value)}>
+                    <option value="">(el del cliente en Odoo)</option>
+                    {cat.plazos_pago.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className={label}>Moneda</label>
+                  <select className={input} value={moneda} disabled={locked} onChange={(e) => setMoneda(e.target.value)}>
+                    {cat.monedas.map((m) => <option key={m} value={m}>{m}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className={label}>IVA</label>
+                  <select className={input} value={iva} disabled={locked} onChange={(e) => setIva(e.target.value)}>
+                    {cat.impuestos.map((i) => <option key={i} value={i}>{i}%</option>)}
+                  </select>
+                </div>
+                <div className="col-span-2">
+                  <label className={label}>Notas</label>
+                  <textarea className={input} rows={2} value={notas} disabled={locked} onChange={(e) => setNotas(e.target.value)} />
+                </div>
+              </div>
+
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b-2 border-gray-300 dark:border-gray-600">
+                    <th className="text-left py-2 pr-3 font-semibold text-gray-700 dark:text-gray-300">Modelo</th>
+                    <th className="text-left py-2 pr-3 font-semibold text-gray-700 dark:text-gray-300">Nombre</th>
+                    <th className="text-right py-2 pr-3 font-semibold text-gray-700 dark:text-gray-300 w-16">Cant.</th>
+                    <th className="text-right py-2 pr-3 font-semibold text-gray-700 dark:text-gray-300 w-28">Precio</th>
+                    <th className="text-right py-2 font-semibold text-gray-700 dark:text-gray-300 w-28">Importe</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.lineas.map((l) => (
+                    <tr key={l.master_sku} className="border-b border-gray-100 dark:border-gray-700">
+                      <td className="py-1.5 pr-3 font-medium text-gray-900 dark:text-white">{l.master_sku}</td>
+                      <td className="py-1.5 pr-3 text-gray-700 dark:text-gray-300">{l.nombre_producto ?? "—"}</td>
+                      <td className="py-1.5 pr-3 text-right text-gray-900 dark:text-white">{l.cantidad}</td>
+                      <td className="py-1.5 pr-3">
+                        <input
+                          type="number" min="0" step="0.01" className={`${input} text-right`}
+                          value={precios[l.master_sku] ?? ""} disabled={locked}
+                          onChange={(e) => setPrecios((p) => ({ ...p, [l.master_sku]: e.target.value }))}
+                        />
+                      </td>
+                      <td className="py-1.5 text-right text-gray-900 dark:text-white">
+                        {(l.cantidad * (Number(precios[l.master_sku]) || 0)).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr>
+                    <td colSpan={4} className="pt-2 text-right font-semibold text-gray-700 dark:text-gray-300">Subtotal ({moneda})</td>
+                    <td className="pt-2 text-right font-bold text-gray-900 dark:text-white">
+                      {total.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </>
+          )}
+        </div>
+
+        <div className="flex justify-end gap-2 px-6 py-4 border-t border-gray-200 dark:border-gray-700">
+          <button onClick={onClose} className="px-4 py-2 rounded-lg text-sm bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-600">
+            Cerrar
+          </button>
+          <button
+            onClick={() => run(false)} disabled={!clienteId || locked || busy || !data}
+            className="px-4 py-2 rounded-lg text-sm bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 hover:bg-blue-200 disabled:opacity-50"
+          >
+            Guardar borrador
+          </button>
+          <button
+            onClick={() => run(true)} disabled={!canSend}
+            className="px-4 py-2 rounded-lg text-sm bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+          >
+            {busy ? "Enviando…" : "Enviar a Odoo y a revisión"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Detail Modal ─────────────────────────────────────────────────────────────
 
 function DetalleModal({ folio, onClose }: { folio: string | null; onClose: () => void }) {
@@ -678,6 +1095,7 @@ export function Salidas() {
   const PAGE_SIZE = 25;
 
   const [detailFolio, setDetailFolio] = useState<string | null>(null);
+  const [facturaFolio, setFacturaFolio] = useState<string | null>(null);
 
   const [formMode, setFormMode] = useState<"create" | "edit">("create");
   const [formVisible, setFormVisible] = useState(false);
@@ -872,8 +1290,8 @@ export function Salidas() {
 
         {/* Table */}
         <div className="flex-1 bg-white dark:bg-gray-800 mx-8 mt-4 mb-6 border border-gray-400 dark:border-gray-700 overflow-hidden flex flex-col rounded-lg">
-          <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1.2fr)_6rem_7rem_6rem] bg-gray-100 dark:bg-gray-700 border-b-2 border-gray-400 dark:border-gray-600">
-            {["Folio", "Fecha Generación", "Fecha Salida", "Año", "Total Piezas", "Acciones"].map((h) => (
+          <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1.2fr)_7rem_9.5rem_9rem] bg-gray-100 dark:bg-gray-700 border-b-2 border-gray-400 dark:border-gray-600">
+            {["Folio", "Fecha de Orden", "Fecha de Salida", "Total Piezas", "Factura", "Acciones"].map((h) => (
               <div key={h} className="py-4 px-3 text-center font-bold text-gray-700 dark:text-gray-300 text-sm border-r border-gray-300 dark:border-gray-600 last:border-r-0">
                 {h}
               </div>
@@ -902,7 +1320,7 @@ export function Salidas() {
               paginated.map((s, i) => (
                 <div
                   key={s.numero_folio}
-                  className={`grid grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1.2fr)_6rem_7rem_6rem] border-b border-gray-200 dark:border-gray-700 ${
+                  className={`grid grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1.2fr)_7rem_9.5rem_9rem] border-b border-gray-200 dark:border-gray-700 ${
                     i % 2 === 0 ? "bg-white dark:bg-gray-900" : "bg-gray-50 dark:bg-gray-800"
                   } hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors`}
                 >
@@ -921,20 +1339,26 @@ export function Salidas() {
                   <div className="py-3 px-3 border-r border-gray-200 dark:border-gray-700 flex items-center justify-center text-sm text-gray-700 dark:text-gray-300">
                     {formatDate(s.fecha_salida)}
                   </div>
-                  <div className="py-3 px-3 border-r border-gray-200 dark:border-gray-700 flex items-center justify-center text-sm text-gray-700 dark:text-gray-300">
-                    {s.anio}
-                  </div>
                   <div className="py-3 px-3 border-r border-gray-200 dark:border-gray-700 flex items-center justify-center font-semibold text-sm text-gray-900 dark:text-white">
                     {s.total_piezas.toLocaleString("es-MX")}
                   </div>
-                  <div className="py-3 px-2 flex items-center justify-center gap-1">
+                  <div className="py-2 px-2 border-r border-gray-200 dark:border-gray-700 flex items-center justify-center">
+                    <button
+                      onClick={() => setFacturaFolio(s.numero_folio)}
+                      className="inline-flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 text-sm font-semibold hover:bg-emerald-200 dark:hover:bg-emerald-900/60 transition-colors"
+                      title="Factura al cliente (Odoo)"
+                    >
+                      🧾 Factura Odoo
+                    </button>
+                  </div>
+                  <div className="py-2 px-2 flex flex-col items-stretch justify-center gap-1.5">
                     {isSuperAdmin ? (
                       <>
                         {s.estado === "confirmado" && (
                           <button
                             onClick={() => handleBotarSalida(s.numero_folio)}
                             disabled={botandoFolio === s.numero_folio}
-                            className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 text-xs font-medium hover:bg-red-200 dark:hover:bg-red-900/60 transition-colors disabled:opacity-50"
+                            className="inline-flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 text-sm font-medium hover:bg-red-200 dark:hover:bg-red-900/60 transition-colors disabled:opacity-50"
                             title="Botar salida (regresa a borrador)"
                           >
                             {botandoFolio === s.numero_folio ? "…" : "⛔ Botar"}
@@ -942,10 +1366,10 @@ export function Salidas() {
                         )}
                         <button
                           onClick={() => handleOpenEdit(s)}
-                          className="inline-flex items-center justify-center w-7 h-7 rounded text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors text-sm"
+                          className="inline-flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 text-sm font-medium hover:bg-blue-200 dark:hover:bg-blue-900/60 transition-colors"
                           title={`Editar folio — botada ${s.veces_rechazado ?? 0} veces`}
                         >
-                          ✏️
+                          ✏️ Editar
                         </button>
                         {(s.veces_rechazado ?? 0) > 0 && (
                           <span className="text-[10px] text-red-500 dark:text-red-400 font-semibold" title="Veces botada">
@@ -959,7 +1383,7 @@ export function Salidas() {
                           <button
                             onClick={() => handleConfirmarSalida(s.numero_folio)}
                             disabled={confirmandoFolio === s.numero_folio}
-                            className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 text-xs font-medium hover:bg-green-200 dark:hover:bg-green-900/60 transition-colors disabled:opacity-50"
+                            className="inline-flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 text-sm font-medium hover:bg-green-200 dark:hover:bg-green-900/60 transition-colors disabled:opacity-50"
                             title="Confirmar salida"
                           >
                             {confirmandoFolio === s.numero_folio ? "…" : "✓ Confirmar"}
@@ -967,17 +1391,17 @@ export function Salidas() {
                         )}
                         <button
                           onClick={() => handleOpenEdit(s)}
-                          className="inline-flex items-center justify-center w-7 h-7 rounded text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors text-sm"
+                          className="inline-flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 text-sm font-medium hover:bg-blue-200 dark:hover:bg-blue-900/60 transition-colors"
                           title="Editar folio"
                         >
-                          ✏️
+                          ✏️ Editar
                         </button>
                         <button
                           onClick={() => { setDeleteError(null); setDeleteFolio(s); }}
-                          className="inline-flex items-center justify-center w-7 h-7 rounded text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors text-sm"
+                          className="inline-flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg bg-gray-100 dark:bg-gray-700 text-red-600 dark:text-red-400 text-sm font-medium hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors"
                           title="Eliminar folio"
                         >
-                          🗑️
+                          🗑️ Eliminar
                         </button>
                       </>
                     )}
@@ -1015,6 +1439,7 @@ export function Salidas() {
       </div>
 
       {detailFolio && <DetalleModal folio={detailFolio} onClose={() => setDetailFolio(null)} />}
+      {facturaFolio && <FacturaModal folio={facturaFolio} onClose={() => setFacturaFolio(null)} onToast={setToast} />}
 
       {formVisible && (
         <SalidaFormModal
