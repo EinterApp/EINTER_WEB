@@ -73,3 +73,7 @@ Pase de cierre del proyecto: se borraron `src/components/VentaModal.tsx` (sin im
 ## Antes de tocar algo, ten en cuenta
 
 - `EinterBodegaApp` (Android) es un cliente separado del mismo backend, y hoy está desincronizado en varios endpoints. Un cambio aquí que además debería aplicar a mobile no se propaga solo — hay que replicarlo a mano (ver `../EinterBodegaApp/AGENTS.md`).
+
+## Movimientos ahora lee el historial unificado — 2026-11-01
+`src/pages/Movimientos.tsx` ya no usa `/api/catalogo/entradas` ni `/api/catalogo/salidas` (leían la tabla `movimientos`, que ya no recibe entradas/salidas nuevas). Ahora lee `GET /api/historial?pageSize=100000` (contenedores, salidas THD, órdenes, transferencias y merma) con columnas Fecha, Tipo, Documento, Referencia, SKU, Producto, Cantidad y Ubicación. Esos dos endpoints de catálogo ya no los usa nadie en la web.
+Además `src/index.css` pinta `html.dark`/`body` con el mismo fondo oscuro de la página (`#111827`) y `color-scheme: dark`, para que el rebote al hacer scroll de más no deje ver el blanco del navegador (aplica a toda la web).

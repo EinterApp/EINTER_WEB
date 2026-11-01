@@ -1,40 +1,84 @@
-// Page listing inventory movements between locations.
+// Page listing the unified history of goods in/out and between ubicaciones, read from
+// GET /api/historial (contenedores, salidas THD, ordenes, transferencias and merma).
 import { useState, useEffect, useCallback } from "react";
 import { useDarkMode } from "../context/DarkModeContext";
 import { fetchAPI } from "../lib/fetch";
-import type { Movement as Movimiento } from "../lib/types";
 import { useRefetchOnFocus } from "../hooks/useRefetchOnFocus";
 import { ColumnFilter, distinctValues } from "../components/ColumnFilter";
 
-const COL_ACCESSORS: Record<string, (m: Movimiento) => string> = {
-  nombre: (m) => m.nombre_usuario || "",
-  from: (m) => String(m.id_ubicacion_origen || ""),
-  to: (m) => String(m.id_ubicacion_destino || ""),
-  oldMasterSku: (m) => m.old_masterSKU || "",
-  newMasterSku: (m) => m.new_masterSKU || "",
+interface HistorialItem {
+  origen: "contenedor" | "thd_salida" | "orden" | "movimiento" | "merma";
+  tipo: "entrada" | "salida" | "transferencia" | "merma";
+  fecha: string | null;
+  referencia: string | null;
+  id_articulo: number | null;
+  sku: string | null;
+  producto_nombre: string | null;
+  cantidad: number | null;
+  estado: string | null;
+  ubicacion_origen_nombre: string | null;
+  ubicacion_destino_nombre: string | null;
+  usuario: string | null;
+}
+
+const ORIGEN_LABEL: Record<HistorialItem["origen"], string> = {
+  contenedor: "Contenedor",
+  thd_salida: "Salida THD",
+  orden: "Orden",
+  movimiento: "Transferencia",
+  merma: "Merma",
+};
+
+const TIPO_LABEL: Record<HistorialItem["tipo"], string> = {
+  entrada: "Entrada",
+  salida: "Salida",
+  transferencia: "Transferencia",
+  merma: "Merma",
+};
+
+const TIPO_BADGE: Record<HistorialItem["tipo"], string> = {
+  entrada: "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300",
+  salida: "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300",
+  transferencia: "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300",
+  merma: "bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300",
+};
+
+const ubicacionText = (m: HistorialItem) =>
+  m.ubicacion_origen_nombre || m.ubicacion_destino_nombre
+    ? `${m.ubicacion_origen_nombre ?? "-"} → ${m.ubicacion_destino_nombre ?? "-"}`
+    : "";
+
+const fechaText = (m: HistorialItem) => (m.fecha ? new Date(m.fecha).toLocaleDateString() : "");
+
+const COL_ACCESSORS: Record<string, (m: HistorialItem) => string> = {
+  date: fechaText,
+  tipo: (m) => TIPO_LABEL[m.tipo] ?? m.tipo,
+  origen: (m) => ORIGEN_LABEL[m.origen] ?? m.origen,
+  referencia: (m) => m.referencia || "",
+  sku: (m) => m.sku || "",
+  producto: (m) => m.producto_nombre || "",
   cantidad: (m) => String(m.cantidad ?? ""),
-  date: (m) => (m.fecha ? new Date(m.fecha).toLocaleDateString() : ""),
+  ubicacion: ubicacionText,
 };
 
 const COLUMN_DEFS: { key: string; label: string }[] = [
-  { key: "nombre", label: "Nombre" },
-  { key: "from", label: "Desde" },
-  { key: "to", label: "Hacia" },
-  { key: "oldMasterSku", label: "MOD Antiguo" },
-  { key: "newMasterSku", label: "MOD Nuevo" },
-  { key: "cantidad", label: "Cantidad" },
   { key: "date", label: "Fecha" },
+  { key: "tipo", label: "Tipo" },
+  { key: "origen", label: "Documento" },
+  { key: "referencia", label: "Referencia" },
+  { key: "sku", label: "SKU" },
+  { key: "producto", label: "Producto" },
+  { key: "cantidad", label: "Cantidad" },
+  { key: "ubicacion", label: "Ubicación" },
 ];
 
 const TABLE_GRID_COLUMNS =
-  "minmax(0,1.5fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1.5fr) minmax(0,1.5fr) minmax(0,1fr) minmax(0,1.2fr)";
+  "minmax(0,1fr) minmax(0,1fr) minmax(0,1.1fr) minmax(0,1.4fr) minmax(0,1.3fr) minmax(0,2fr) minmax(0,0.9fr) minmax(0,1.6fr)";
 
 export function Movimientos() {
   useDarkMode();
-  const [movimientos, setMovimientos] = useState<Movimiento[]>([]);
-  const [filteredMovimientos, setFilteredMovimientos] = useState<Movimiento[]>(
-    []
-  );
+  const [movimientos, setMovimientos] = useState<HistorialItem[]>([]);
+  const [filteredMovimientos, setFilteredMovimientos] = useState<HistorialItem[]>([]);
   const [searchText, setSearchText] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -49,40 +93,15 @@ export function Movimientos() {
     setError(null);
 
     try {
-      // Fetch both entradas and salidas from Odoo endpoints
-      const [entradasRes, salidasRes] = await Promise.all([
-        fetchAPI("/api/catalogo/entradas"),
-        fetchAPI("/api/catalogo/salidas"),
-      ]) as [{ items?: Record<string, unknown>[] }, { items?: Record<string, unknown>[] }];
-
-      // Map Odoo fields to Movement type
-      const mapItem = (item: Record<string, unknown>): Movimiento => ({
-        id_movimiento: Number(item.id_movimiento) || 0,
-        id_usuario: 0,
-        id_ubicacion_origen: 0,
-        id_ubicacion_destino: 0,
-        tipo: item.tipo === "entrada" || item.tipo === "compra" ? 1 : 2,
-        id_tarima: 0,
-        id_articulo: 0,
-        cantidad: Number(item.cantidad) || 0,
-        old_masterSKU: String(item.master_sku || ""),
-        new_masterSKU: String(item.master_sku || ""),
-        fecha: String(item.fecha_movimiento || ""),
-        nombre_usuario: String(item.nombre_producto || ""),
-      });
-
-      const allItems = [
-        ...(entradasRes.items || []).map(mapItem),
-        ...(salidasRes.items || []).map(mapItem),
-      ].sort((a, b) => b.id_movimiento - a.id_movimiento);
-
-      setMovimientos(allItems);
-      setFilteredMovimientos(allItems);
+      const res = (await fetchAPI("/api/historial?pageSize=100000")) as {
+        items?: HistorialItem[];
+      };
+      const items = res.items || [];
+      setMovimientos(items);
+      setFilteredMovimientos(items);
     } catch (err) {
-      console.error("Error fetching movimientos from database:", err);
-      setError(
-        err instanceof Error ? err.message : "Error connecting to database"
-      );
+      console.error("Error fetching historial from database:", err);
+      setError(err instanceof Error ? err.message : "Error connecting to database");
     } finally {
       setLoading(false);
     }
@@ -101,12 +120,11 @@ export function Movimientos() {
       const query = searchText.toLowerCase();
       filtered = filtered.filter(
         (m) =>
-          m.old_masterSKU?.toLowerCase().includes(query) ||
-          m.new_masterSKU?.toLowerCase().includes(query) ||
-          m.nombre_usuario?.toLowerCase().includes(query) ||
-          String(m.id_ubicacion_origen || "").includes(query) ||
-          String(m.id_ubicacion_destino || "").includes(query) ||
-          m.fecha?.toLowerCase().includes(query)
+          m.referencia?.toLowerCase().includes(query) ||
+          m.sku?.toLowerCase().includes(query) ||
+          m.producto_nombre?.toLowerCase().includes(query) ||
+          ubicacionText(m).toLowerCase().includes(query) ||
+          (TIPO_LABEL[m.tipo] ?? "").toLowerCase().includes(query)
       );
     }
 
@@ -124,33 +142,22 @@ export function Movimientos() {
         let bValue: string | number;
 
         switch (sortBy.column) {
-          case "nombre":
-            aValue = (a.nombre_usuario || "").toLowerCase();
-            bValue = (b.nombre_usuario || "").toLowerCase();
-            break;
-          case "from":
-            aValue = a.id_ubicacion_origen || 0;
-            bValue = b.id_ubicacion_origen || 0;
-            break;
-          case "to":
-            aValue = a.id_ubicacion_destino || 0;
-            bValue = b.id_ubicacion_destino || 0;
-            break;
-          case "oldMasterSku":
-            aValue = (a.old_masterSKU || "").toLowerCase();
-            bValue = (b.old_masterSKU || "").toLowerCase();
-            break;
-          case "newMasterSku":
-            aValue = (a.new_masterSKU || "").toLowerCase();
-            bValue = (b.new_masterSKU || "").toLowerCase();
+          case "date":
+            aValue = a.fecha || "";
+            bValue = b.fecha || "";
             break;
           case "cantidad":
             aValue = a.cantidad || 0;
             bValue = b.cantidad || 0;
             break;
-          case "date":
-            aValue = a.fecha || "";
-            bValue = b.fecha || "";
+          case "tipo":
+          case "origen":
+          case "referencia":
+          case "sku":
+          case "producto":
+          case "ubicacion":
+            aValue = COL_ACCESSORS[sortBy.column](a).toLowerCase();
+            bValue = COL_ACCESSORS[sortBy.column](b).toLowerCase();
             break;
           default:
             return 0;
@@ -260,51 +267,48 @@ export function Movimientos() {
               </p>
             </div>
           ) : (
-            filteredMovimientos.map((m, index) => (
-              <div
-                key={m.id_movimiento}
-                className={`grid [&>*]:min-w-0 border-b border-gray-300 dark:border-gray-700 ${
-                  index % 2 === 0 ? "bg-white dark:bg-gray-900" : "bg-gray-50 dark:bg-gray-800"
-                }`}
-                style={{ gridTemplateColumns: TABLE_GRID_COLUMNS }}
-              >
-                <div className="flex-[1.5] py-4 px-4 border-r border-gray-300 dark:border-gray-700 flex items-center justify-center">
-                  <span className="text-gray-900 dark:text-white font-robotoRegular text-lg text-center">
-                    {m.nombre_usuario}
-                  </span>
+            filteredMovimientos.map((m, index) => {
+              const cell = "py-4 px-4 border-r border-gray-300 dark:border-gray-700 flex items-center justify-center";
+              const text = "text-gray-900 dark:text-white font-robotoRegular text-lg text-center break-words";
+              return (
+                <div
+                  key={`${m.origen}-${m.referencia}-${m.id_articulo}-${index}`}
+                  className={`grid [&>*]:min-w-0 border-b border-gray-300 dark:border-gray-700 ${
+                    index % 2 === 0 ? "bg-white dark:bg-gray-900" : "bg-gray-50 dark:bg-gray-800"
+                  }`}
+                  style={{ gridTemplateColumns: TABLE_GRID_COLUMNS }}
+                >
+                  <div className={cell}>
+                    <span className={text}>{fechaText(m) || "-"}</span>
+                  </div>
+                  <div className={cell}>
+                    <span
+                      className={`px-2 py-1 rounded-full text-sm font-medium ${TIPO_BADGE[m.tipo] ?? ""}`}
+                    >
+                      {TIPO_LABEL[m.tipo] ?? m.tipo}
+                    </span>
+                  </div>
+                  <div className={cell}>
+                    <span className={text}>{ORIGEN_LABEL[m.origen] ?? m.origen}</span>
+                  </div>
+                  <div className={cell}>
+                    <span className={text}>{m.referencia || "-"}</span>
+                  </div>
+                  <div className={cell}>
+                    <span className={text}>{m.sku || "-"}</span>
+                  </div>
+                  <div className={cell}>
+                    <span className={text}>{m.producto_nombre || "-"}</span>
+                  </div>
+                  <div className={cell}>
+                    <span className={text}>{m.cantidad || "-"}</span>
+                  </div>
+                  <div className="py-4 px-4 flex items-center justify-center">
+                    <span className={text}>{ubicacionText(m) || "-"}</span>
+                  </div>
                 </div>
-                <div className="flex-1 py-4 px-4 border-r border-gray-300 dark:border-gray-700 flex items-center justify-center">
-                  <span className="text-gray-900 dark:text-white font-robotoRegular text-lg text-center">
-                    {m.id_ubicacion_origen || "-"}
-                  </span>
-                </div>
-                <div className="flex-1 py-4 px-4 border-r border-gray-300 dark:border-gray-700 flex items-center justify-center">
-                  <span className="text-gray-900 dark:text-white font-robotoRegular text-lg text-center">
-                    {m.id_ubicacion_destino || "-"}
-                  </span>
-                </div>
-                <div className="flex-[1.5] py-4 px-4 border-r border-gray-300 dark:border-gray-700 flex items-center justify-center">
-                  <span className="text-gray-900 dark:text-white font-robotoRegular text-lg text-center">
-                    {m.old_masterSKU || "-"}
-                  </span>
-                </div>
-                <div className="flex-[1.5] py-4 px-4 border-r border-gray-300 dark:border-gray-700 flex items-center justify-center">
-                  <span className="text-gray-900 dark:text-white font-robotoRegular text-lg text-center">
-                    {m.new_masterSKU || "-"}
-                  </span>
-                </div>
-                <div className="flex-1 py-4 px-4 border-r border-gray-300 dark:border-gray-700 flex items-center justify-center">
-                  <span className="text-gray-900 dark:text-white font-robotoRegular text-lg text-center">
-                    {m.cantidad || "-"}
-                  </span>
-                </div>
-                <div className="flex-[1.2] py-4 px-4 flex items-center justify-center">
-                  <span className="text-gray-900 dark:text-white font-robotoRegular text-lg text-center">
-                    {m.fecha ? new Date(m.fecha).toLocaleDateString() : "-"}
-                  </span>
-                </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       </div>
