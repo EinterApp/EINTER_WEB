@@ -78,7 +78,7 @@ type SortDir = "asc" | "desc";
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const TABLE_GRID =
-  "minmax(0,1.7fr) minmax(0,1.2fr) minmax(0,2.6fr) 5rem 7.5rem 7.5rem 6.5rem 8.5rem 5.5rem";
+  "minmax(0,1.7fr) minmax(0,1.2fr) 5rem 7.5rem 7.5rem 9.5rem 8.5rem 9rem";
 
 const STATUS_COLORS: Record<StatusEnvio, string> = {
   pendiente:   "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300",
@@ -111,9 +111,8 @@ const YEARS = ["2025", "2026"];
 const TAMANO_OPTIONS = ["1X20", "1X40", "2X40", "FULL", "SENCILLO"];
 
 const COLUMNS: { key: SortColumn; label: string; align: string }[] = [
-  { key: "orden", label: "Orden", align: "justify-start" },
+  { key: "orden", label: "Orden", align: "justify-center" },
   { key: "contenedores", label: "Contenedores", align: "justify-center" },
-  { key: "productos", label: "Productos", align: "justify-start" },
   { key: "total_piezas", label: "Piezas", align: "justify-center" },
   { key: "fecha_pedido", label: "Fecha de pedido", align: "justify-center" },
   { key: "fecha_movimiento", label: "Fecha de llegada", align: "justify-center" },
@@ -181,6 +180,426 @@ function parseFolio(folio: string): { orden: string; contenedores: string } {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
+// ─── Factura del proveedor (Odoo) ─────────────────────────────────────────────
+
+interface FacturaOrdenLinea {
+  id_articulo: number;
+  master_sku: string;
+  nombre_producto: string | null;
+  cantidad: number;
+  precio_unitario: number;
+}
+
+interface FacturaOrdenData {
+  estado_orden: EstadoOrden;
+  fecha_llegada: string | null;
+  importe_factura: number | null;
+  importe_factura_moneda: string;
+  tiene_pdf: boolean;
+  proveedor_sugerido_odoo_id: number | null;
+  factura: {
+    proveedor_odoo_id: number;
+    numero_factura: string;
+    fecha_factura: string;
+    fecha_vencimiento: string | null;
+    moneda: string;
+    impuesto_odoo_id: number | null;
+    notas: string | null;
+    estado: string;
+    odoo_name: string | null;
+    odoo_sync_error: string | null;
+    motivo_rechazo: string | null;
+  } | null;
+  lineas: FacturaOrdenLinea[];
+}
+
+interface FacturaOrdenRevision {
+  advertencias: string[];
+  avisos: string[];
+  odoo: {
+    proveedor: string | null;
+    moneda: string | null;
+    numero_factura: string | null;
+    fecha: string | null;
+    vencimiento: string | null;
+    subtotal: number;
+    impuestos: number;
+    total: number;
+    lineas: { id: number; name: string; quantity: number; price_unit: number; price_subtotal: number }[];
+  };
+}
+
+const FACTURA_PROV_ESTADOS: Record<string, string> = {
+  sin_enviar: "Sin enviar",
+  en_revision: "En revisión",
+  aprobada: "Aprobada",
+  rechazada: "Rechazada",
+  error: "Error",
+};
+
+const money = (n: number) => n.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+function FacturaProveedorModal({ folio, onClose, onToast }: {
+  folio: string;
+  onClose: () => void;
+  onToast: (t: { ok: boolean; text: string }) => void;
+}) {
+  const base = "/api/facturas-proveedor";
+  const { isSuperAdmin } = useRole();
+  const [data, setData] = useState<FacturaOrdenData | null>(null);
+  const [proveedores, setProveedores] = useState<{ id: number; name: string; vat?: string | false }[]>([]);
+  const [impuestos, setImpuestos] = useState<{ id: number; name: string; amount: number }[]>([]);
+  const [revision, setRevision] = useState<FacturaOrdenRevision | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [rechazando, setRechazando] = useState(false);
+  const [motivo, setMotivo] = useState("");
+
+  const [proveedorId, setProveedorId] = useState("");
+  const [numero, setNumero] = useState("");
+  const [fechaFactura, setFechaFactura] = useState("");
+  const [fechaVence, setFechaVence] = useState("");
+  const [moneda, setMoneda] = useState("USD");
+  const [impuestoId, setImpuestoId] = useState("");
+  const [notas, setNotas] = useState("");
+  const [precios, setPrecios] = useState<Record<number, string>>({});
+
+  const applyData = (d: FacturaOrdenData) => {
+    setData(d);
+    const f = d.factura;
+    setProveedorId(String(f?.proveedor_odoo_id ?? d.proveedor_sugerido_odoo_id ?? ""));
+    setNumero(f?.numero_factura ?? "");
+    setFechaFactura((f?.fecha_factura ?? d.fecha_llegada ?? "").slice(0, 10));
+    setFechaVence((f?.fecha_vencimiento ?? "").slice(0, 10));
+    setMoneda(f?.moneda ?? d.importe_factura_moneda ?? "USD");
+    setImpuestoId(f?.impuesto_odoo_id ? String(f.impuesto_odoo_id) : "");
+    setNotas(f?.notas ?? "");
+    setPrecios(Object.fromEntries(d.lineas.map((l) => [l.id_articulo, String(l.precio_unitario)])));
+    const est = f?.estado;
+    if (est === "en_revision" || est === "aprobada") {
+      fetchAPI(`${base}/ordenes/${encodeURIComponent(folio)}/revision`)
+        .then((r) => setRevision(r as FacturaOrdenRevision))
+        .catch((err: Error) => setError(err.message));
+    } else {
+      setRevision(null);
+    }
+  };
+
+  useEffect(() => {
+    setLoading(true);
+    setError(null);
+    Promise.all([
+      fetchAPI(`${base}/ordenes/${encodeURIComponent(folio)}`),
+      fetchAPI(`${base}/proveedores`),
+      fetchAPI(`${base}/impuestos`),
+    ])
+      .then(([d, p, i]) => {
+        applyData(d as FacturaOrdenData);
+        setProveedores(p as typeof proveedores);
+        setImpuestos(i as typeof impuestos);
+      })
+      .catch((err: Error) => setError(err.message))
+      .finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [folio]);
+
+  const estado = data?.factura?.estado ?? "sin_enviar";
+  const locked = estado === "en_revision" || estado === "aprobada";
+  const subtotal = (data?.lineas ?? []).reduce(
+    (s, l) => s + l.cantidad * (Number(precios[l.id_articulo]) || 0), 0);
+  const impSel = impuestos.find((i) => String(i.id) === impuestoId);
+  const impuestoMonto = impSel ? subtotal * impSel.amount / 100 : 0;
+  const total = subtotal + impuestoMonto;
+
+  const payload = () => ({
+    proveedor_odoo_id: Number(proveedorId),
+    proveedor_nombre: proveedores.find((p) => String(p.id) === proveedorId)?.name ?? null,
+    numero_factura: numero,
+    fecha_factura: fechaFactura,
+    fecha_vencimiento: fechaVence || null,
+    moneda,
+    impuesto_odoo_id: impuestoId ? Number(impuestoId) : null,
+    impuesto_nombre: impSel?.name ?? null,
+    notas: notas.trim() || null,
+    lineas: (data?.lineas ?? []).map((l) => ({
+      id_articulo: l.id_articulo, precio_unitario: Number(precios[l.id_articulo]) || 0,
+    })),
+  });
+
+  const run = async (enviar: boolean) => {
+    setBusy(true);
+    setError(null);
+    try {
+      let d = (await fetchAPI(`${base}/ordenes/${encodeURIComponent(folio)}`, {
+        method: "PUT", body: JSON.stringify(payload()),
+      })) as FacturaOrdenData;
+      if (enviar) {
+        d = (await fetchAPI(`${base}/ordenes/${encodeURIComponent(folio)}/enviar`, { method: "POST" })) as FacturaOrdenData;
+        onToast({ ok: true, text: "Factura enviada a Odoo en borrador y a revisión." });
+      } else {
+        onToast({ ok: true, text: "Borrador de factura guardado." });
+      }
+      applyData(d);
+    } catch (err) {
+      setError((err as Error).message);
+      fetchAPI(`${base}/ordenes/${encodeURIComponent(folio)}`).then((d) => applyData(d as FacturaOrdenData)).catch(() => {});
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const decidir = async (accion: "aprobar" | "rechazar") => {
+    setBusy(true);
+    setError(null);
+    try {
+      const d = (await fetchAPI(`${base}/ordenes/${encodeURIComponent(folio)}/${accion}`, {
+        method: "POST",
+        body: JSON.stringify(accion === "rechazar" ? { motivo } : {}),
+      })) as FacturaOrdenData;
+      onToast({ ok: true, text: accion === "aprobar" ? "Factura aprobada." : "Factura rechazada y devuelta a captura." });
+      setRechazando(false);
+      setMotivo("");
+      applyData(d);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const input = "w-full px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm disabled:opacity-60";
+  const label = "block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1";
+  const completo = !!proveedorId && numero.trim() !== "" && !!fechaFactura;
+  const canSend = completo && data?.estado_orden === "confirmado" && !locked && !busy;
+  const difiere = data?.importe_factura != null && Math.abs(data.importe_factura - total) > 0.01;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
+      <div
+        className="bg-white dark:bg-gray-800 rounded-lg shadow-2xl w-full max-w-3xl mx-4 max-h-[90vh] flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+          <div>
+            <h2 className="text-xl font-bold text-gray-900 dark:text-white">Factura del proveedor · {folio}</h2>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+              Estado: <span className="font-semibold">{FACTURA_PROV_ESTADOS[estado] ?? estado}</span>
+              {data?.factura?.odoo_name ? ` · Odoo ${data.factura.odoo_name}` : ""}
+            </p>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-2xl leading-none px-1">×</button>
+        </div>
+
+        <div className="flex-1 overflow-auto px-6 py-4 space-y-4">
+          {loading ? (
+            <p className="text-center text-gray-500 py-12 text-sm">Cargando…</p>
+          ) : !data ? (
+            <p className="text-center text-red-500 py-12 text-sm">{error ?? "No se pudo cargar"}</p>
+          ) : (
+            <>
+              {data.estado_orden !== "confirmado" && (
+                <div className="px-3 py-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded text-xs text-amber-700 dark:text-amber-400">
+                  La entrada debe estar confirmada para enviar la factura a Odoo. Puedes guardar el borrador mientras tanto.
+                </div>
+              )}
+              {!data.tiene_pdf && (
+                <div className="px-3 py-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded text-xs text-amber-700 dark:text-amber-400">
+                  Esta orden aún no tiene el PDF de la factura del proveedor; súbelo para que se adjunte en Odoo.
+                </div>
+              )}
+              {error && (
+                <div className="px-3 py-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded text-xs text-red-700 dark:text-red-400">{error}</div>
+              )}
+              {!error && data.factura?.odoo_sync_error && (
+                <div className="px-3 py-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded text-xs text-red-700 dark:text-red-400">
+                  Último error de Odoo: {data.factura.odoo_sync_error}
+                </div>
+              )}
+              {estado === "rechazada" && data.factura?.motivo_rechazo && (
+                <div className="px-3 py-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded text-xs text-red-700 dark:text-red-400">
+                  Rechazada por el SuperAdmin: {data.factura.motivo_rechazo}
+                </div>
+              )}
+
+              {revision && (
+                <div className="border border-blue-200 dark:border-blue-700 rounded-lg p-4 bg-blue-50/50 dark:bg-blue-900/10 space-y-2">
+                  <h3 className="text-sm font-bold text-gray-900 dark:text-white">Revisión — así quedó en Odoo</h3>
+                  {revision.advertencias.map((a) => (
+                    <p key={a} className="text-xs text-red-600 dark:text-red-400">⚠ {a}</p>
+                  ))}
+                  {revision.avisos.map((a) => (
+                    <p key={a} className="text-xs text-amber-700 dark:text-amber-400">ℹ {a}</p>
+                  ))}
+                  <p className="text-xs text-gray-600 dark:text-gray-400">
+                    {revision.odoo.proveedor} · Factura {revision.odoo.numero_factura ?? "—"} · {revision.odoo.moneda} · {revision.odoo.fecha ?? "sin fecha"}{revision.odoo.vencimiento ? ` · vence ${revision.odoo.vencimiento}` : ""}
+                  </p>
+                  <table className="w-full text-xs">
+                    <tbody>
+                      {revision.odoo.lineas.map((l) => (
+                        <tr key={l.id} className="border-b border-blue-100 dark:border-blue-900/40">
+                          <td className="py-1 pr-2 text-gray-800 dark:text-gray-200">{l.name}</td>
+                          <td className="py-1 pr-2 text-right">{l.quantity}</td>
+                          <td className="py-1 pr-2 text-right">{money(l.price_unit)}</td>
+                          <td className="py-1 text-right font-medium">{money(l.price_subtotal)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <div className="text-right text-sm text-gray-900 dark:text-white">
+                    <div>Subtotal: {money(revision.odoo.subtotal)}</div>
+                    <div>Impuestos: {money(revision.odoo.impuestos)}</div>
+                    <div className="font-bold">Total: {money(revision.odoo.total)} {revision.odoo.moneda}</div>
+                  </div>
+                  {estado === "en_revision" && !isSuperAdmin && (
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Esperando la aprobación de un SuperAdmin.</p>
+                  )}
+                  {estado === "en_revision" && isSuperAdmin && (
+                    rechazando ? (
+                      <div className="space-y-2">
+                        <textarea className={input} rows={2} placeholder="Motivo del rechazo" value={motivo} onChange={(e) => setMotivo(e.target.value)} />
+                        <div className="flex justify-end gap-2">
+                          <button onClick={() => setRechazando(false)} className="px-3 py-1.5 rounded text-sm bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200">Cancelar</button>
+                          <button onClick={() => decidir("rechazar")} disabled={busy || !motivo.trim()} className="px-3 py-1.5 rounded text-sm bg-red-600 text-white hover:bg-red-700 disabled:opacity-50">Confirmar rechazo</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex justify-end gap-2">
+                        <button onClick={() => setRechazando(true)} disabled={busy} className="px-3 py-1.5 rounded text-sm bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 hover:bg-red-200 disabled:opacity-50">Rechazar</button>
+                        <button onClick={() => decidir("aprobar")} disabled={busy || revision.advertencias.length > 0} className="px-3 py-1.5 rounded text-sm bg-green-600 text-white hover:bg-green-700 disabled:opacity-50">Aprobar</button>
+                      </div>
+                    )
+                  )}
+                  {estado === "aprobada" && (
+                    <p className="text-xs text-green-700 dark:text-green-400">Aprobada. La factura sigue en borrador en Odoo hasta que contabilidad la publique.</p>
+                  )}
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="col-span-2">
+                  <label className={label}>Proveedor (Odoo)</label>
+                  <select className={input} value={proveedorId} disabled={locked} onChange={(e) => setProveedorId(e.target.value)}>
+                    <option value="">Selecciona…</option>
+                    {proveedores.map((p) => (
+                      <option key={p.id} value={p.id}>{p.name}{p.vat ? ` · ${p.vat}` : ""}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className={label}>Número de factura del proveedor</label>
+                  <input className={input} value={numero} disabled={locked} onChange={(e) => setNumero(e.target.value)} />
+                </div>
+                <div>
+                  <label className={label}>Moneda</label>
+                  <select className={input} value={moneda} disabled={locked} onChange={(e) => setMoneda(e.target.value)}>
+                    <option value="USD">USD</option>
+                    <option value="MXN">MXN</option>
+                  </select>
+                </div>
+                <div>
+                  <label className={label}>Fecha de la factura</label>
+                  <input type="date" className={input} value={fechaFactura} disabled={locked} onChange={(e) => setFechaFactura(e.target.value)} />
+                </div>
+                <div>
+                  <label className={label}>Fecha de vencimiento</label>
+                  <input type="date" className={input} value={fechaVence} disabled={locked} onChange={(e) => setFechaVence(e.target.value)} />
+                </div>
+                <div className="col-span-2">
+                  <label className={label}>Impuesto</label>
+                  <select className={input} value={impuestoId} disabled={locked} onChange={(e) => setImpuestoId(e.target.value)}>
+                    <option value="">Sin impuesto</option>
+                    {impuestos.map((i) => <option key={i.id} value={i.id}>{i.name}</option>)}
+                  </select>
+                </div>
+                <div className="col-span-2">
+                  <label className={label}>Notas</label>
+                  <textarea className={input} rows={2} value={notas} disabled={locked} onChange={(e) => setNotas(e.target.value)} />
+                </div>
+              </div>
+
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b-2 border-gray-300 dark:border-gray-600">
+                    <th className="text-left py-2 pr-3 font-semibold text-gray-700 dark:text-gray-300">Modelo</th>
+                    <th className="text-left py-2 pr-3 font-semibold text-gray-700 dark:text-gray-300">Nombre</th>
+                    <th className="text-right py-2 pr-3 font-semibold text-gray-700 dark:text-gray-300 w-16">Cant.</th>
+                    <th className="text-right py-2 pr-3 font-semibold text-gray-700 dark:text-gray-300 w-28">Precio</th>
+                    <th className="text-right py-2 font-semibold text-gray-700 dark:text-gray-300 w-28">Importe</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.lineas.map((l) => (
+                    <tr key={l.id_articulo} className="border-b border-gray-100 dark:border-gray-700">
+                      <td className="py-1.5 pr-3 font-medium text-gray-900 dark:text-white">{l.master_sku}</td>
+                      <td className="py-1.5 pr-3 text-gray-700 dark:text-gray-300">{l.nombre_producto ?? "—"}</td>
+                      <td className="py-1.5 pr-3 text-right text-gray-900 dark:text-white">{l.cantidad}</td>
+                      <td className="py-1.5 pr-3">
+                        <input
+                          type="number" min="0" step="0.0001" className={`${input} text-right`}
+                          value={precios[l.id_articulo] ?? ""} disabled={locked}
+                          onChange={(e) => setPrecios((p) => ({ ...p, [l.id_articulo]: e.target.value }))}
+                        />
+                      </td>
+                      <td className="py-1.5 text-right text-gray-900 dark:text-white">
+                        {money(l.cantidad * (Number(precios[l.id_articulo]) || 0))}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr>
+                    <td colSpan={4} className="pt-2 text-right font-semibold text-gray-700 dark:text-gray-300">Subtotal ({moneda})</td>
+                    <td className="pt-2 text-right font-bold text-gray-900 dark:text-white">{money(subtotal)}</td>
+                  </tr>
+                  {impSel && (
+                    <tr>
+                      <td colSpan={4} className="text-right text-gray-600 dark:text-gray-400">{impSel.name}</td>
+                      <td className="text-right text-gray-900 dark:text-white">{money(impuestoMonto)}</td>
+                    </tr>
+                  )}
+                  <tr>
+                    <td colSpan={4} className="text-right font-semibold text-gray-700 dark:text-gray-300">Total</td>
+                    <td className="text-right font-bold text-gray-900 dark:text-white">{money(total)}</td>
+                  </tr>
+                  {data.importe_factura != null && (
+                    <tr>
+                      <td colSpan={4} className={`text-right text-xs ${difiere ? "text-amber-600 dark:text-amber-400" : "text-gray-500 dark:text-gray-400"}`}>
+                        Importe capturado en la orden{difiere ? " (no coincide)" : ""}
+                      </td>
+                      <td className={`text-right text-xs ${difiere ? "text-amber-600 dark:text-amber-400" : "text-gray-500 dark:text-gray-400"}`}>
+                        {money(data.importe_factura)} {data.importe_factura_moneda}
+                      </td>
+                    </tr>
+                  )}
+                </tfoot>
+              </table>
+            </>
+          )}
+        </div>
+
+        <div className="flex justify-end gap-2 px-6 py-4 border-t border-gray-200 dark:border-gray-700">
+          <button onClick={onClose} className="px-4 py-2 rounded-lg text-sm bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-600">
+            Cerrar
+          </button>
+          <button
+            onClick={() => run(false)} disabled={!completo || locked || busy || !data}
+            className="px-4 py-2 rounded-lg text-sm bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 hover:bg-blue-200 disabled:opacity-50"
+          >
+            Guardar borrador
+          </button>
+          <button
+            onClick={() => run(true)} disabled={!canSend}
+            className="px-4 py-2 rounded-lg text-sm bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+          >
+            {busy ? "Enviando…" : "Enviar a Odoo y a revisión"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function Entradas() {
   useDarkMode();
   const { isSuperAdmin } = useRole();
@@ -215,6 +634,7 @@ export function Entradas() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [etiquetaVisible, setEtiquetaVisible] = useState(false);
+  const [facturaFolio, setFacturaFolio] = useState<string | null>(null);
 
   // Create / edit modal state
   const [createVisible, setCreateVisible] = useState(false);
@@ -1003,9 +1423,9 @@ export function Entradas() {
                   style={{ gridTemplateColumns: TABLE_GRID }}
                 >
                   {/* Orden */}
-                  <div className="py-3 px-3 border-r border-gray-200 dark:border-gray-600 flex items-center">
+                  <div className="py-3 px-3 border-r border-gray-200 dark:border-gray-600 flex items-center justify-center">
                     <span
-                      className="text-gray-900 dark:text-gray-100 text-sm font-mono font-medium truncate"
+                      className="text-gray-900 dark:text-gray-100 text-sm font-mono font-medium truncate text-center"
                       title={row.folio_orden}
                     >
                       {row.orden || "-"}
@@ -1015,18 +1435,6 @@ export function Entradas() {
                   <div className="py-3 px-3 border-r border-gray-200 dark:border-gray-600 flex items-center justify-center">
                     <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 text-xs font-medium">
                       {row.contenedores}
-                    </span>
-                  </div>
-                  {/* Productos (resumen) */}
-                  <div className="py-3 px-3 border-r border-gray-200 dark:border-gray-600 flex items-center gap-2">
-                    <span className="inline-flex items-center justify-center shrink-0 px-1.5 h-5 rounded bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 text-xs font-semibold">
-                      {row.num_productos}
-                    </span>
-                    <span
-                      className="text-gray-700 dark:text-gray-300 text-sm truncate"
-                      title={row.productos ?? ""}
-                    >
-                      {row.productos || "-"}
                     </span>
                   </div>
                   {/* Piezas */}
@@ -1049,7 +1457,7 @@ export function Entradas() {
                   </div>
                   {/* Factura */}
                   <div
-                    className="py-3 px-3 flex items-center justify-center gap-1 border-r border-gray-200 dark:border-gray-600"
+                    className="py-2 px-2 flex flex-col items-stretch justify-center gap-1.5 border-r border-gray-200 dark:border-gray-600"
                     onClick={(e) => e.stopPropagation()}
                   >
                     {uploadingFolio === row.folio_orden ? (
@@ -1061,9 +1469,9 @@ export function Entradas() {
                             e.stopPropagation();
                             handleViewPdf(row.folio_orden);
                           }}
-                          className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 text-xs font-medium hover:bg-green-200 dark:hover:bg-green-900/60 transition-colors"
+                          className="inline-flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 text-sm font-medium hover:bg-green-200 dark:hover:bg-green-900/60 transition-colors"
                         >
-                          📄 Ver
+                          📄 Ver PDF
                         </button>
                         <button
                           onClick={(e) => {
@@ -1071,10 +1479,10 @@ export function Entradas() {
                             setSelectedFolio(row.folio_orden);
                             pdfInputRef.current?.click();
                           }}
-                          className="inline-flex items-center justify-center w-6 h-6 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors text-xs"
+                          className="inline-flex items-center justify-center px-3 py-1 rounded-lg text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors text-xs font-medium"
                           title="Reemplazar PDF"
                         >
-                          ↑
+                          Reemplazar PDF
                         </button>
                       </>
                     ) : (
@@ -1084,11 +1492,21 @@ export function Entradas() {
                           setSelectedFolio(row.folio_orden);
                           pdfInputRef.current?.click();
                         }}
-                        className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 text-xs font-medium hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                        className="inline-flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 text-sm font-medium hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
                       >
-                        📎 Subir
+                        📎 Subir PDF
                       </button>
                     )}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setFacturaFolio(row.folio_orden);
+                      }}
+                      className="inline-flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 text-sm font-semibold hover:bg-emerald-200 dark:hover:bg-emerald-900/60 transition-colors"
+                      title="Factura del proveedor (Odoo)"
+                    >
+                      🧾 Factura Odoo
+                    </button>
                   </div>
                   <div
                     className="py-3 px-3 flex items-center justify-center border-r border-gray-200 dark:border-gray-600"
@@ -1120,7 +1538,7 @@ export function Entradas() {
                   </div>
                   {/* Acciones */}
                   <div
-                    className="py-3 px-2 flex items-center justify-center gap-1"
+                    className="py-2 px-2 flex flex-col items-stretch justify-center gap-1.5"
                     onClick={(e) => e.stopPropagation()}
                   >
                     {isSuperAdmin ? (
@@ -1132,7 +1550,7 @@ export function Entradas() {
                               handleBotarOrden(row.folio_orden);
                             }}
                             disabled={botandoFolio === row.folio_orden}
-                            className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 text-xs font-medium hover:bg-red-200 dark:hover:bg-red-900/60 transition-colors disabled:opacity-50"
+                            className="inline-flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 text-sm font-medium hover:bg-red-200 dark:hover:bg-red-900/60 transition-colors disabled:opacity-50"
                             title="Botar orden (regresa a borrador)"
                           >
                             {botandoFolio === row.folio_orden ? "…" : "⛔ Botar"}
@@ -1144,10 +1562,10 @@ export function Entradas() {
                             handleOpenEdit(row.folio_orden);
                           }}
                           disabled={editLoadingFolio === row.folio_orden}
-                          className="inline-flex items-center justify-center w-7 h-7 rounded text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors text-sm disabled:opacity-50 disabled:cursor-wait"
+                          className="inline-flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 text-sm font-medium hover:bg-blue-200 dark:hover:bg-blue-900/60 transition-colors disabled:opacity-50 disabled:cursor-wait"
                           title={`Editar orden — botada ${row.veces_rechazado ?? 0} veces`}
                         >
-                          {editLoadingFolio === row.folio_orden ? "…" : "✏️"}
+                          {editLoadingFolio === row.folio_orden ? "…" : "✏️ Editar"}
                         </button>
                         {(row.veces_rechazado ?? 0) > 0 && (
                           <span className="text-[10px] text-red-500 dark:text-red-400 font-semibold" title="Veces botada">
@@ -1164,7 +1582,7 @@ export function Entradas() {
                               handleConfirmarOrden(row.folio_orden);
                             }}
                             disabled={confirmandoFolio === row.folio_orden}
-                            className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 text-xs font-medium hover:bg-green-200 dark:hover:bg-green-900/60 transition-colors disabled:opacity-50"
+                            className="inline-flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 text-sm font-medium hover:bg-green-200 dark:hover:bg-green-900/60 transition-colors disabled:opacity-50"
                             title="Confirmar orden"
                           >
                             {confirmandoFolio === row.folio_orden ? "…" : "✓ Confirmar"}
@@ -1176,20 +1594,20 @@ export function Entradas() {
                             handleOpenEdit(row.folio_orden);
                           }}
                           disabled={editLoadingFolio === row.folio_orden}
-                          className="inline-flex items-center justify-center w-7 h-7 rounded text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors text-sm disabled:opacity-50 disabled:cursor-wait"
+                          className="inline-flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 text-sm font-medium hover:bg-blue-200 dark:hover:bg-blue-900/60 transition-colors disabled:opacity-50 disabled:cursor-wait"
                           title="Editar orden"
                         >
-                          {editLoadingFolio === row.folio_orden ? "…" : "✏️"}
+                          {editLoadingFolio === row.folio_orden ? "…" : "✏️ Editar"}
                         </button>
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
                             setDeleteFolio(row.folio_orden);
                           }}
-                          className="inline-flex items-center justify-center w-7 h-7 rounded text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors text-sm"
+                          className="inline-flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg bg-gray-100 dark:bg-gray-700 text-red-600 dark:text-red-400 text-sm font-medium hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors"
                           title="Eliminar orden"
                         >
-                          🗑️
+                          🗑️ Eliminar
                         </button>
                       </>
                     )}
@@ -1402,6 +1820,10 @@ export function Entradas() {
             )}
           </div>
         </div>
+      )}
+
+      {facturaFolio && (
+        <FacturaProveedorModal folio={facturaFolio} onClose={() => setFacturaFolio(null)} onToast={setToast} />
       )}
 
       <ContenedorEtiquetaModal
