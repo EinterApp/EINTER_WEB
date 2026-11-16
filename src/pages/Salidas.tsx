@@ -21,6 +21,8 @@ interface SalidaFolio {
   num_productos: number;
   estado?: EstadoOrden;
   veces_rechazado?: number;
+  // Customer invoice state; null/undefined = invoice data not captured yet.
+  factura_estado?: string | null;
 }
 
 interface SalidaProducto {
@@ -105,6 +107,7 @@ interface FacturaSalidaData {
 
 interface FacturaRevision {
   motivo_rechazo: string | null;
+  venta?: string | null;
   advertencias: string[];
   odoo: {
     state: string;
@@ -259,7 +262,7 @@ function FacturaModal({ folio, onClose, onToast }: {
       })) as FacturaSalidaData;
       if (enviar) {
         d = (await fetchAPI(`${base}/salidas/${encodeURIComponent(folio)}/enviar`, { method: "POST" })) as FacturaSalidaData;
-        onToast({ ok: true, text: `Borrador de factura enviado a Odoo (${d.factura?.odoo_name ?? folio}).` });
+        onToast({ ok: true, text: "Venta y borrador de factura generados en Odoo; pendientes de revisión." });
       } else {
         onToast({ ok: true, text: "Borrador de factura guardado." });
       }
@@ -303,7 +306,7 @@ function FacturaModal({ folio, onClose, onToast }: {
             <>
               {data.estado_salida !== "confirmado" && (
                 <div className="px-3 py-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded text-xs text-amber-700 dark:text-amber-400">
-                  La salida debe estar confirmada para enviar la factura a Odoo. Puedes guardar los datos mientras tanto.
+                  Al confirmar la salida, Odoo genera la venta y el borrador de factura con estos datos. Guárdalos antes de confirmar.
                 </div>
               )}
               {error && (
@@ -318,7 +321,7 @@ function FacturaModal({ folio, onClose, onToast }: {
               )}
               {revision && (
                 <div className="border border-blue-200 dark:border-blue-700 rounded-lg p-4 bg-blue-50/50 dark:bg-blue-900/10 space-y-2">
-                  <h3 className="text-sm font-bold text-gray-900 dark:text-white">Revisión — así quedó en Odoo</h3>
+                  <h3 className="text-sm font-bold text-gray-900 dark:text-white">Revisión — así quedó en Odoo{revision.venta ? ` · Venta ${revision.venta}` : ""}</h3>
                   {revision.advertencias.map((a) => (
                     <p key={a} className="text-xs text-amber-700 dark:text-amber-400">⚠ {a}</p>
                   ))}
@@ -482,7 +485,7 @@ function FacturaModal({ folio, onClose, onToast }: {
             onClick={() => run(true)} disabled={!canSend}
             className="px-4 py-2 rounded-lg text-sm bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
           >
-            {busy ? "Enviando…" : "Enviar a Odoo y a revisión"}
+            {busy ? "Generando…" : "Generar venta y factura"}
           </button>
         </div>
       </div>
@@ -1188,10 +1191,17 @@ export function Salidas() {
   };
 
   const handleConfirmarSalida = async (folio: string) => {
+    // Confirming creates the Odoo sale and invoice, so the invoice data must exist first.
+    const salida = salidas.find((x) => x.numero_folio === folio);
+    if (salida && !salida.factura_estado) {
+      setToast({ ok: false, text: "Captura primero los datos de la factura (botón Factura Odoo) y luego confirma." });
+      setFacturaFolio(folio);
+      return;
+    }
     setConfirmandoFolio(folio);
     try {
       await fetchAPI(`/api/thd/salidas/${encodeURIComponent(folio)}/confirmar`, { method: "PATCH" });
-      setToast({ ok: true, text: `Salida "${folio}" confirmada.` });
+      setToast({ ok: true, text: `Salida "${folio}" confirmada; se generan la venta y la factura en Odoo.` });
       fetchSalidas();
     } catch (err) {
       setToast({ ok: false, text: (err as Error).message });
@@ -1342,7 +1352,7 @@ export function Salidas() {
                   <div className="py-3 px-3 border-r border-gray-200 dark:border-gray-700 flex items-center justify-center font-semibold text-sm text-gray-900 dark:text-white">
                     {s.total_piezas.toLocaleString("es-MX")}
                   </div>
-                  <div className="py-2 px-2 border-r border-gray-200 dark:border-gray-700 flex items-center justify-center">
+                  <div className="py-2 px-2 border-r border-gray-200 dark:border-gray-700 flex flex-col items-stretch justify-center gap-1">
                     <button
                       onClick={() => setFacturaFolio(s.numero_folio)}
                       className="inline-flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 text-sm font-semibold hover:bg-emerald-200 dark:hover:bg-emerald-900/60 transition-colors"
@@ -1350,6 +1360,9 @@ export function Salidas() {
                     >
                       🧾 Factura Odoo
                     </button>
+                    <span className="text-xs text-center text-gray-500 dark:text-gray-400">
+                      {s.factura_estado ? FACTURA_ESTADOS[s.factura_estado] ?? s.factura_estado : "Sin datos"}
+                    </span>
                   </div>
                   <div className="py-2 px-2 flex flex-col items-stretch justify-center gap-1.5">
                     {isSuperAdmin ? (
