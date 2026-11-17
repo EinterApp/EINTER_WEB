@@ -20,6 +20,16 @@ type TopProducto = { nombre: string; unidades: number };
 type ProductoAlerta = { nombre: string; diasCobertura: number; semaforo: "CRITICO" | "ALERTA" };
 type CatalogoProducto = { id: string; nombre: string; codigo: string };
 
+// Shape of GET /api/misc/dashboard and GET /api/productos (only the fields this page reads).
+type DashboardResponse = {
+  kpi: DashboardKpi;
+  ventasSemanas: { semana_label?: string | null; semana_num: number; monto: number | string }[];
+  ventasMeses: { anio_real: number; mes_num: number; monto: number | string }[];
+  topProductos: { nombre: string; unidades: number | string }[];
+  productosAlerta: { nombre: string; diasCobertura: number | string; semaforo: string }[];
+};
+type ProductosResponse = { items?: { id: number | string; name: string; sku: string }[] };
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function fmtImporte(n: number) {
@@ -185,15 +195,15 @@ export function Home() {
   const load = useCallback(async () => {
       try {
         const [dashData, productosData] = await Promise.all([
-          api.getDashboard() as Promise<any>,
-          api.getProductosCatalogo(50) as Promise<any>,
+          api.getDashboard() as Promise<DashboardResponse>,
+          api.getProductosCatalogo(50) as Promise<ProductosResponse>,
         ]);
 
         setKpi(dashData.kpi);
 
         // Weekly chart, use semana_label as x-axis label
         setVentasSemanas(
-          (dashData.ventasSemanas as any[]).map((v) => ({
+          dashData.ventasSemanas.map((v) => ({
             label: String(v.semana_label ?? `S${v.semana_num}`),
             monto: Number(v.monto),
           }))
@@ -202,7 +212,7 @@ export function Home() {
         // Monthly chart, fill in last 6 months, zeros for missing
         const last6 = getLast6Months();
         const mesMap = new Map<string, number>(
-          (dashData.ventasMeses as any[]).map((v) => [
+          dashData.ventasMeses.map((v) => [
             `${v.anio_real}-${String(v.mes_num).padStart(2, "0")}`,
             Number(v.monto),
           ])
@@ -210,21 +220,21 @@ export function Home() {
         setVentasMeses(last6.map(({ key, mes }) => ({ mes, monto: mesMap.get(key) ?? 0 })));
 
         setTopProductos(
-          (dashData.topProductos as any[]).map((p) => ({
+          dashData.topProductos.map((p) => ({
             nombre: p.nombre as string,
             unidades: Number(p.unidades),
           }))
         );
 
         setProductosAlerta(
-          (dashData.productosAlerta as any[]).map((p) => ({
+          dashData.productosAlerta.map((p) => ({
             nombre: p.nombre as string,
             diasCobertura: Number(p.diasCobertura),
             semaforo: p.semaforo as "CRITICO" | "ALERTA",
           }))
         );
 
-        const items: any[] = productosData.items ?? [];
+        const items = productosData.items ?? [];
         setCatalogoProductos(
           items.map((p) => ({
             id: String(p.id),
