@@ -27,6 +27,10 @@ interface ContenedorRow {
   productos: string | null;
   pdf_filename?: string | null;
   pdf_uploaded_at?: string | null;
+  factura_odoo_id?: number | null;
+  factura_odoo_estado?: string | null;
+  factura_odoo_name?: string | null;
+  factura_odoo_error?: string | null;
   status_envio?: StatusEnvio | null;
   estado?: EstadoOrden | null;
   veces_rechazado?: number;
@@ -183,6 +187,7 @@ function parseFolio(folio: string): { orden: string; contenedores: string } {
 export function Entradas() {
   useDarkMode();
   const { isSuperAdmin } = useRole();
+  const [publishingFolio, setPublishingFolio] = useState<string | null>(null);
   const currentYear = String(getMonterreyYear());
 
   const [data, setData] = useState<ContenedorRow[]>([]);
@@ -644,6 +649,20 @@ export function Entradas() {
     }
   };
 
+  const handlePublicarFactura = async (folio: string) => {
+    if (!window.confirm(`¿Publicar en Odoo la factura de la orden ${folio}? Una vez publicada ya no se edita desde aquí.`)) return;
+    setPublishingFolio(folio);
+    try {
+      await fetchAPI(`/api/odoo/factura-proveedor/${encodeURIComponent(folio)}/publicar`, { method: "POST" });
+      setToast({ ok: true, text: "Factura publicada en Odoo" });
+      setRetryCount((c) => c + 1);
+    } catch (err) {
+      setToast({ ok: false, text: (err as Error).message });
+    } finally {
+      setPublishingFolio(null);
+    }
+  };
+
   const handleViewPdf = async (folio: string) => {
     try {
       const token = await auth.currentUser!.getIdToken(true);
@@ -1063,6 +1082,29 @@ export function Entradas() {
                         >
                           Reemplazar PDF
                         </button>
+                        {row.factura_odoo_estado === "posted" ? (
+                          <span className="text-center text-xs font-medium text-green-700 dark:text-green-300" title={row.factura_odoo_name ?? undefined}>
+                            ✔ Publicada en Odoo
+                          </span>
+                        ) : row.factura_odoo_estado === "cancel" ? (
+                          <span className="text-center text-xs font-medium text-red-600 dark:text-red-400">Cancelada en Odoo</span>
+                        ) : row.factura_odoo_estado === "draft" ? (
+                          isSuperAdmin ? (
+                            <button
+                              disabled={publishingFolio === row.folio_orden}
+                              onClick={(e) => { e.stopPropagation(); handlePublicarFactura(row.folio_orden); }}
+                              className="inline-flex items-center justify-center px-3 py-1.5 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                            >
+                              {publishingFolio === row.folio_orden ? "Publicando…" : "Publicar en Odoo"}
+                            </button>
+                          ) : (
+                            <span className="text-center text-xs font-medium text-amber-700 dark:text-amber-300">Borrador en Odoo</span>
+                          )
+                        ) : row.factura_odoo_error ? (
+                          <span className="text-center text-xs font-medium text-red-600 dark:text-red-400" title={row.factura_odoo_error}>Error al enviar a Odoo</span>
+                        ) : (
+                          <span className="text-center text-xs text-gray-500 dark:text-gray-400">Pendiente de enviar</span>
+                        )}
                       </>
                     ) : (
                       <button
