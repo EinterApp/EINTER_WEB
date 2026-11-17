@@ -17,7 +17,9 @@ export async function fetchAPI(path: string, options: RequestInit = {}): Promise
     let token = '';
     
     if (user) {
-      token = await user.getIdToken(true); // fuerza refresh del token
+      // Cached token: the SDK refreshes it by itself shortly before it expires. Forcing a refresh on
+      // every request added a round trip to Google per call (and hits their rate limits on big screens).
+      token = await user.getIdToken();
     }
 
     const headers: Record<string, string> = {
