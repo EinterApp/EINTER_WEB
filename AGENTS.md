@@ -9,6 +9,15 @@ npm install
 npm run dev   # Vite, puerto 5173
 ```
 
+## Probar en local sin datos reales
+
+```bash
+(cd ../EINTER_API && npm run local:up)   # MySQL + Auth emulado + API en :3055
+npm run dev:local                        # esta web contra ese entorno (.env.docker)
+```
+
+"Iniciar sesión con Google" debe abrir el emulador para elegir una cuenta de prueba. **No verificado en un navegador real:** el inicio de sesión contra el emulador se probó por consola.
+
 ## Bug: editar un producto podía "no guardar" (corregido 2026-10-02)
 
 Reporte de usuaria: edita un producto, guarda, y la ficha sigue mostrando los datos viejos. Causa: `openEditModal` en `Productos.tsx` abría el modal **instantáneamente** con el item de la lista (que no trae `category`, por eso existe un segundo fetch a `GET /api/productos?id=` para completarlo) y luego, cuando ese fetch resolvía en segundo plano, volvía a hacer `setSelectedProduct(...)` con los datos frescos — lo cual re-disparaba el `useEffect` de `ProductModal.tsx` que repuebla `formData` desde `product`. Si la usuaria ya había empezado a escribir antes de que ese segundo fetch resolviera, su edición se pisaba silenciosamente con los datos (sin cambios) del servidor, y al día siguiente guardaba exactamente lo mismo que ya había — sin ningún error, porque técnicamente no hubo conflicto de `updated_at`, solo se perdió la edición antes de llegar al PUT.

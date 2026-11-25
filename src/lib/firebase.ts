@@ -1,7 +1,7 @@
 // Initializes the Firebase app and exports the auth and Firestore
 // service references used throughout the app.
 import { initializeApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
+import { connectAuthEmulator, getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 
 // Firebase configuration from environment variables
@@ -19,6 +19,12 @@ const app = initializeApp(firebaseConfig);
 
 // Initialize Firebase Authentication and get a reference to the service
 export const auth = getAuth(app);
+
+// Local test stack only (`npm run dev:local`, see .env.docker): sign in against the emulator of
+// EINTER_API/docker. Never in a production build.
+if (import.meta.env.DEV && import.meta.env.VITE_AUTH_EMULATOR_URL) {
+  connectAuthEmulator(auth, import.meta.env.VITE_AUTH_EMULATOR_URL);
+}
 
 // Initialize Firestore and get a reference to the service
 export const db = getFirestore(app);
