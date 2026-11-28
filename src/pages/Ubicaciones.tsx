@@ -44,7 +44,7 @@ function TarimaBarcodeSearch() {
     setLoading(true);
     setError(null);
     try {
-      const res = (await fetchAPI(`/api/tarimas?sku=${encodeURIComponent(sku)}`)) as {
+      const res = (await fetchAPI(`/api/pallets?sku=${encodeURIComponent(sku)}`)) as {
         id_tarima: number;
         sku: string;
         isla_master_sku?: string | null;
@@ -102,7 +102,7 @@ function FilaBarcodeSearch() {
     setLoading(true);
     setError(null);
     try {
-      const islaRes = (await fetchAPI(`/api/islas?sku=${encodeURIComponent(sku)}`)) as {
+      const islaRes = (await fetchAPI(`/api/islands?sku=${encodeURIComponent(sku)}`)) as {
         id_isla: number;
         master_sku: string;
         nombre_isla?: string | null;
@@ -159,7 +159,7 @@ function IslaRow({ isla, onPrintFila, onPrintTarima }: {
       setLoading(true);
       setError(null);
       try {
-        const res = (await fetchAPI(`/api/islas/${isla.id_isla}/tarimas`)) as { items: Tarima[] };
+        const res = (await fetchAPI(`/api/islands/${isla.id_isla}/pallets`)) as { items: Tarima[] };
         setTarimas(res.items);
       } catch (err) {
         setError((err as Error).message);
@@ -269,7 +269,7 @@ export function Ubicaciones() {
   useEffect(() => {
     setLoadingUbicaciones(true);
     setUbicacionesError(null);
-    fetchAPI("/api/ubicaciones?pageSize=200")
+    fetchAPI("/api/locations?pageSize=200")
       .then((res: unknown) => {
         const data = res as { items: Ubicacion[] };
         setUbicaciones(data.items);
@@ -286,7 +286,7 @@ export function Ubicaciones() {
     setIslas(null);
     setLoadingIslas(true);
     setIslasError(null);
-    fetchAPI(`/api/islas?id_ubicacion=${selectedId}&pageSize=200`)
+    fetchAPI(`/api/islands?locationId=${selectedId}&pageSize=200`)
       .then((res: unknown) => {
         const data = res as { items: Isla[] };
         setIslas(data.items);

@@ -287,12 +287,12 @@ export function Entradas() {
         const params = new URLSearchParams({
           page: "1",
           limit: "100000",
-          anio,
+          year: anio,
         });
-        if (mes !== "0") params.set("mes", mes);
+        if (mes !== "0") params.set("month", mes);
 
         const raw = (await fetchAPI(
-          `/api/contenedores?${params.toString()}`
+          `/api/containers?${params.toString()}`
         )) as ContenedoresResponse;
 
         if (!cancelled) {
@@ -380,7 +380,7 @@ export function Entradas() {
     setDetailLoading(true);
     try {
       const raw = (await fetchAPI(
-        `/api/contenedores/${encodeURIComponent(folio)}`
+        `/api/containers/${encodeURIComponent(folio)}`
       )) as ContenedorDetail;
       setDetail(raw);
     } catch (err) {
@@ -401,7 +401,7 @@ export function Entradas() {
   const loadSkuCatalog = () => {
     if (skuCatalog.length > 0) return;
     setSkuCatalogLoading(true);
-    fetchAPI("/api/productos?pageSize=100000")
+    fetchAPI("/api/products?pageSize=100000")
       .then((raw) => {
         const items = (raw as ProductosResponse).items ?? [];
         setSkuCatalog(
@@ -443,7 +443,7 @@ export function Entradas() {
     loadSkuCatalog();
     try {
       const raw = (await fetchAPI(
-        `/api/contenedores/${encodeURIComponent(folio)}`
+        `/api/containers/${encodeURIComponent(folio)}`
       )) as ContenedorDetail;
       setEditFolio(folio);
       setCreateFolio(folio);
@@ -477,7 +477,7 @@ export function Entradas() {
     if (!deleteFolio) return;
     setDeleteLoading(true);
     try {
-      await fetchAPI(`/api/contenedores/${encodeURIComponent(deleteFolio)}`, {
+      await fetchAPI(`/api/containers/${encodeURIComponent(deleteFolio)}`, {
         method: "DELETE",
       });
       setToast({ ok: true, text: `Orden "${deleteFolio}" eliminada.` });
@@ -564,12 +564,12 @@ export function Entradas() {
       });
 
       if (editFolio) {
-        await fetchAPI(`/api/contenedores/${encodeURIComponent(editFolio)}`, {
+        await fetchAPI(`/api/containers/${encodeURIComponent(editFolio)}`, {
           method: "PUT",
           body,
         });
       } else {
-        await fetchAPI("/api/contenedores", { method: "POST", body });
+        await fetchAPI("/api/containers", { method: "POST", body });
       }
 
       setReviewEstado(null);
@@ -594,7 +594,7 @@ export function Entradas() {
   const handleConfirmarOrden = async (folio: string) => {
     setConfirmandoFolio(folio);
     try {
-      await fetchAPI(`/api/contenedores/${encodeURIComponent(folio)}/confirmar`, { method: "PATCH" });
+      await fetchAPI(`/api/containers/${encodeURIComponent(folio)}/confirm`, { method: "PATCH" });
       setToast({ ok: true, text: `Orden "${folio}" confirmada.` });
       setRetryCount((c) => c + 1);
     } catch (err) {
@@ -607,7 +607,7 @@ export function Entradas() {
   const handleBotarOrden = async (folio: string) => {
     setBotandoFolio(folio);
     try {
-      await fetchAPI(`/api/contenedores/${encodeURIComponent(folio)}/botar`, { method: "PATCH" });
+      await fetchAPI(`/api/containers/${encodeURIComponent(folio)}/reject`, { method: "PATCH" });
       setToast({ ok: true, text: `Orden "${folio}" botada de vuelta a borrador.` });
       setRetryCount((c) => c + 1);
     } catch (err) {
@@ -628,7 +628,7 @@ export function Entradas() {
       const form = new FormData();
       form.append("file", file);
       const res = await fetch(
-        `${apiBase}/api/contenedores/${encodeURIComponent(selectedFolio)}/pdf`,
+        `${apiBase}/api/containers/${encodeURIComponent(selectedFolio)}/pdf`,
         {
           method: "POST",
           headers: { Authorization: `Bearer ${token}` },
@@ -653,7 +653,7 @@ export function Entradas() {
     if (!window.confirm(`¿Publicar en Odoo la factura de la orden ${folio}? Una vez publicada ya no se edita desde aquí.`)) return;
     setPublishingFolio(folio);
     try {
-      await fetchAPI(`/api/odoo/factura-proveedor/${encodeURIComponent(folio)}/publicar`, { method: "POST" });
+      await fetchAPI(`/api/odoo/vendor-invoices/${encodeURIComponent(folio)}/publish`, { method: "POST" });
       setToast({ ok: true, text: "Factura publicada en Odoo" });
       setRetryCount((c) => c + 1);
     } catch (err) {
@@ -668,7 +668,7 @@ export function Entradas() {
       const token = await auth.currentUser!.getIdToken(true);
       const apiBase = import.meta.env.VITE_API_BASE_URL || "";
       const res = await fetch(
-        `${apiBase}/api/contenedores/${encodeURIComponent(folio)}/pdf`,
+        `${apiBase}/api/containers/${encodeURIComponent(folio)}/pdf`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -691,7 +691,7 @@ export function Entradas() {
     setStatusOverrides((prev) => ({ ...prev, [folio]: newStatus }));
     setUpdatingStatuses((prev) => new Set([...prev, folio]));
     try {
-      await fetchAPI(`/api/contenedores/${encodeURIComponent(folio)}/status`, {
+      await fetchAPI(`/api/containers/${encodeURIComponent(folio)}/status`, {
         method: 'PATCH',
         body: JSON.stringify({ status_envio: newStatus }),
       });
