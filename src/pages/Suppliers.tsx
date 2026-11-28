@@ -1,6 +1,6 @@
 // Supplier management page: list, create, edit, and delete proveedores.
 import { useState, useEffect, useCallback } from "react";
-import { ProveedorModal } from "../components/ProveedorModal";
+import { SupplierModal } from "../components/SupplierModal";
 import { DeleteConfirmModal } from "../components/DeleteConfirmModal";
 import { useDarkMode } from "../context/DarkModeContext";
 import { fetchAPI } from "../lib/fetch";
@@ -16,7 +16,7 @@ interface Proveedor {
 const TABLE_GRID_COLUMNS =
   "minmax(0,3fr) minmax(0,2fr) minmax(0,1.5fr) minmax(0,1.5fr)";
 
-export function Proveedores() {
+export function Suppliers() {
   useDarkMode();
   const [proveedores, setProveedores] = useState<Proveedor[]>([]);
   const [filteredProveedores, setFilteredProveedores] = useState<Proveedor[]>(
@@ -424,7 +424,7 @@ export function Proveedores() {
       </div>
 
       {/* Modals */}
-      <ProveedorModal
+      <SupplierModal
         visible={modalVisible}
         proveedor={selectedProveedor}
         mode={modalMode}

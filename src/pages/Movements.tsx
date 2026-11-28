@@ -75,7 +75,7 @@ const COLUMN_DEFS: { key: string; label: string }[] = [
 const TABLE_GRID_COLUMNS =
   "minmax(0,1fr) minmax(0,1fr) minmax(0,1.1fr) minmax(0,1.4fr) minmax(0,1.3fr) minmax(0,2fr) minmax(0,0.9fr) minmax(0,1.6fr)";
 
-export function Movimientos() {
+export function Movements() {
   useDarkMode();
   const [movimientos, setMovimientos] = useState<HistorialItem[]>([]);
   const [filteredMovimientos, setFilteredMovimientos] = useState<HistorialItem[]>([]);

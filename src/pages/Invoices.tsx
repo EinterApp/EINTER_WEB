@@ -67,7 +67,7 @@ function formatMoney(v: number, moneda = "MXN") {
   return v.toLocaleString("es-MX", { style: "currency", currency: moneda, minimumFractionDigits: 2 });
 }
 
-export function Facturas() {
+export function Invoices() {
   useDarkMode();
 
   const [ordenes, setOrdenes] = useState<OrdenRow[]>([]);

@@ -77,7 +77,7 @@ const PROD_COL_ACCESSORS: Record<string, (p: Product) => string> = {
   cost: (p) => (p.cost ? `$${parseFloat(String(p.cost)).toFixed(2)}` : "-"),
 };
 
-export function Productos() {
+export function Products() {
   useDarkMode();
   const [products, setProducts] = useState<Product[]>([]);
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);

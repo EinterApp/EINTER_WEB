@@ -40,7 +40,7 @@ function LabelBarcode({ sku }: { sku: string }) {
   return <svg ref={svgRef} style={{ maxWidth: "100%", height: "auto" }} />;
 }
 
-export function EtiquetaModal({ visible, masterSkus, onClose }: EtiquetaModalProps) {
+export function ProductLabelModal({ visible, masterSkus, onClose }: EtiquetaModalProps) {
   useDarkMode();
   const [productos, setProductos] = useState<ProductoLocal[]>([]);
   const [notFound, setNotFound] = useState<string[]>([]);

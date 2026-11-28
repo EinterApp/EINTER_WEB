@@ -26,7 +26,7 @@ interface TarimaEtiquetaModalProps {
   onClose: () => void;
 }
 
-export function TarimaEtiquetaModal({ visible, tarima, onClose }: TarimaEtiquetaModalProps) {
+export function PalletLabelModal({ visible, tarima, onClose }: TarimaEtiquetaModalProps) {
   useDarkMode();
   const svgRef = useRef<SVGSVGElement>(null);
   const [cartones, setCartones] = useState<CartonRow[]>([]);

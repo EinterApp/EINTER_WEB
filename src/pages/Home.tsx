@@ -4,7 +4,7 @@ import { useDarkMode } from "../context/DarkModeContext";
 import { api } from "../lib/api";
 import { useRefetchOnFocus } from "../hooks/useRefetchOnFocus";
 import { getMonterreyNow } from "../lib/dateMx";
-import { EtiquetaModal } from "../components/EtiquetaModal";
+import { ProductLabelModal } from "../components/ProductLabelModal";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -504,7 +504,7 @@ export function Home() {
         </div>
       </div>
 
-      <EtiquetaModal
+      <ProductLabelModal
         visible={etiquetaVisible}
         masterSkus={selectedForLabels.map((p) => p.codigo)}
         onClose={() => setEtiquetaVisible(false)}

@@ -622,7 +622,7 @@ function OrdenModal({ orden, onClose, modalData, modalLoading, modalError }: Ord
 
 // ── Component ──────────────────────────────────────────────────────────────────
 
-export function THDComparativo() {
+export function ThdComparison() {
   useDarkMode();
 
   // Shared filter state

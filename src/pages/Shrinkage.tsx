@@ -119,7 +119,7 @@ function formatDate(iso: string) {
   return d.toLocaleString("es-MX", { dateStyle: "short", timeStyle: "short" });
 }
 
-export function Merma() {
+export function Shrinkage() {
   useDarkMode();
   const { isSuperAdmin } = useRole();
 

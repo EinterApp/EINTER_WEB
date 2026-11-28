@@ -26,7 +26,7 @@ interface FilaEtiquetaModalProps {
   onClose: () => void;
 }
 
-export function FilaEtiquetaModal({ visible, isla, onClose }: FilaEtiquetaModalProps) {
+export function RowLabelModal({ visible, isla, onClose }: FilaEtiquetaModalProps) {
   useDarkMode();
   const svgRef = useRef<SVGSVGElement>(null);
   const [posiciones, setPosiciones] = useState<FilaPosicion[]>([]);

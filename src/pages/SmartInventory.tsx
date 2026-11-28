@@ -141,7 +141,7 @@ function fmtDias(d: number) {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function InventarioInteligente() {
+export function SmartInventory() {
   useDarkMode();
 
   // ── State ──────────────────────────────────────────────────────────────────

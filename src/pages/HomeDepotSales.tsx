@@ -490,7 +490,7 @@ function NuevaSemanaModal({ anio, semanas, productos, onClose, onSave }: NuevaSe
 
 const ANIOS_DISPONIBLES = [2025, 2026];
 
-export function VentasHomeDepot() {
+export function HomeDepotSales() {
   useDarkMode();
 
   const [anio, setAnio] = useState<number>(getMonterreyYear());

@@ -7,7 +7,7 @@ import { useRefetchOnFocus } from "../hooks/useRefetchOnFocus";
 import { auth } from "../lib/firebase";
 import { ColumnFilter, distinctValues } from "../components/ColumnFilter";
 import { SkuCombobox, type SkuOption } from "../components/SkuCombobox";
-import { ContenedorEtiquetaModal } from "../components/ContenedorEtiquetaModal";
+import { ContainerLabelModal } from "../components/ContainerLabelModal";
 import { getMonterreyDateISO, getMonterreyYear } from "../lib/dateMx";
 import { useRole } from "../hooks/useRole";
 
@@ -184,7 +184,7 @@ function parseFolio(folio: string): { orden: string; contenedores: string } {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function Entradas() {
+export function Entries() {
   useDarkMode();
   const { isSuperAdmin } = useRole();
   const [publishingFolio, setPublishingFolio] = useState<string | null>(null);
@@ -1433,7 +1433,7 @@ export function Entradas() {
         </div>
       )}
 
-      <ContenedorEtiquetaModal
+      <ContainerLabelModal
         visible={etiquetaVisible}
         detail={detail}
         onClose={() => setEtiquetaVisible(false)}
