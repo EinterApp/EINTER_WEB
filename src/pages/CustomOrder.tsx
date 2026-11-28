@@ -95,7 +95,7 @@ function PctBar({ val, low, high }: { val: number; low: number; high: number }) 
 
 // ─── Componente principal ─────────────────────────────────────────────────────
 
-export function PedidoPersonalizado() {
+export function CustomOrder() {
   useDarkMode();
 
   // ── Datos ─────────────────────────────────────────────────────────────────

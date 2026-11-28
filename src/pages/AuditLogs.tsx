@@ -22,7 +22,7 @@ function formatFecha(iso: string) {
   return d.toLocaleString("es-MX", { dateStyle: "short", timeStyle: "short" });
 }
 
-export function Bitacora() {
+export function AuditLogs() {
   useDarkMode();
 
   const [rows, setRows] = useState<BitacoraRow[]>([]);

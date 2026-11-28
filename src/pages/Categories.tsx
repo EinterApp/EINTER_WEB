@@ -82,7 +82,7 @@ const AccordionItem: React.FC<AccordionItemProps> = ({
   );
 };
 
-export function Categorias() {
+export function Categories() {
   useDarkMode(); // Initialize dark mode context
   const [data, setData] = useState<Category[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(null);

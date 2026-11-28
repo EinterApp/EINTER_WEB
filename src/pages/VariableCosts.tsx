@@ -314,7 +314,7 @@ function GraficaModal({ mod, nombre, onClose }: { mod: number; nombre: string; o
 
 const ANIOS_DISPONIBLES = [2025, 2026];
 
-export function CostosVariables() {
+export function VariableCosts() {
   useDarkMode();
 
   const [anio, setAnio] = useState<number>(getMonterreyYear());

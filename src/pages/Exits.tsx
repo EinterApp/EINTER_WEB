@@ -1083,7 +1083,7 @@ function SalidaFormModal({
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
-export function Salidas() {
+export function Exits() {
   useDarkMode();
   const { isSuperAdmin } = useRole();
 

@@ -4,8 +4,8 @@
 import { useEffect, useState } from "react";
 import { useDarkMode } from "../context/DarkModeContext";
 import { fetchAPI } from "../lib/fetch";
-import { TarimaEtiquetaModal, type TarimaRef } from "../components/TarimaEtiquetaModal";
-import { FilaEtiquetaModal } from "../components/FilaEtiquetaModal";
+import { PalletLabelModal, type TarimaRef } from "../components/PalletLabelModal";
+import { RowLabelModal } from "../components/RowLabelModal";
 
 interface Ubicacion {
   id_ubicacion: number;
@@ -77,7 +77,7 @@ function TarimaBarcodeSearch() {
       </button>
       {error && <p className="text-red-500 text-sm">{error}</p>}
 
-      <TarimaEtiquetaModal
+      <PalletLabelModal
         visible={etiquetaVisible}
         tarima={tarima}
         onClose={() => setEtiquetaVisible(false)}
@@ -135,7 +135,7 @@ function FilaBarcodeSearch() {
       </button>
       {error && <p className="text-red-500 text-sm">{error}</p>}
 
-      <FilaEtiquetaModal visible={etiquetaVisible} isla={isla} onClose={() => setEtiquetaVisible(false)} />
+      <RowLabelModal visible={etiquetaVisible} isla={isla} onClose={() => setEtiquetaVisible(false)} />
     </div>
   );
 }
@@ -244,7 +244,7 @@ function IslaRow({ isla, onPrintFila, onPrintTarima }: {
   );
 }
 
-export function Ubicaciones() {
+export function Locations() {
   useDarkMode();
   const [ubicaciones, setUbicaciones] = useState<Ubicacion[]>([]);
   const [loadingUbicaciones, setLoadingUbicaciones] = useState(true);
@@ -424,12 +424,12 @@ export function Ubicaciones() {
         </section>
       </div>
 
-      <FilaEtiquetaModal
+      <RowLabelModal
         visible={filaEtiquetaVisible}
         isla={filaEtiquetaIsla}
         onClose={() => setFilaEtiquetaVisible(false)}
       />
-      <TarimaEtiquetaModal
+      <PalletLabelModal
         visible={tarimaEtiquetaVisible}
         tarima={tarimaEtiquetaTarima}
         onClose={() => setTarimaEtiquetaVisible(false)}
