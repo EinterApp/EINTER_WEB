@@ -40,12 +40,12 @@ export function Bitacora() {
     setLoading(true);
     setError(null);
     const params = new URLSearchParams({ limit: "200" });
-    if (usuario.trim()) params.set("usuario", usuario.trim());
-    if (modulo) params.set("modulo", modulo);
-    if (desde) params.set("desde", desde);
-    if (hasta) params.set("hasta", hasta);
+    if (usuario.trim()) params.set("user", usuario.trim());
+    if (modulo) params.set("module", modulo);
+    if (desde) params.set("from", desde);
+    if (hasta) params.set("to", hasta);
 
-    fetchAPI(`/api/bitacora?${params.toString()}`)
+    fetchAPI(`/api/audit-logs?${params.toString()}`)
       .then((raw) => { if (!cancelled) setRows((raw as { data: BitacoraRow[] }).data ?? []); })
       .catch((err) => { if (!cancelled) setError((err as Error).message); })
       .finally(() => { if (!cancelled) setLoading(false); });

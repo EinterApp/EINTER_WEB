@@ -1,5 +1,5 @@
 // Page listing the unified history of goods in/out and between ubicaciones, read from
-// GET /api/historial (contenedores, salidas THD, ordenes, transferencias and merma).
+// GET /api/history (contenedores, salidas THD, transferencias and merma).
 import { useState, useEffect, useCallback } from "react";
 import { useDarkMode } from "../context/DarkModeContext";
 import { fetchAPI } from "../lib/fetch";
@@ -93,7 +93,7 @@ export function Movimientos() {
     setError(null);
 
     try {
-      const res = (await fetchAPI("/api/historial?pageSize=100000")) as {
+      const res = (await fetchAPI("/api/history?pageSize=100000")) as {
         items?: HistorialItem[];
       };
       const items = res.items || [];

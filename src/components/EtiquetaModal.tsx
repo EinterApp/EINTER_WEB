@@ -58,7 +58,7 @@ export function EtiquetaModal({ visible, masterSkus, onClose }: EtiquetaModalPro
     Promise.all(
       masterSkus.map(async (sku) => {
         const res = (await fetchAPI(
-          `/api/productos?search=${encodeURIComponent(sku)}&pageSize=5`
+          `/api/products?search=${encodeURIComponent(sku)}&pageSize=5`
         )) as { items?: ProductoLocal[] };
         return (res.items ?? []).find((p) => p.sku === sku) ?? null;
       })

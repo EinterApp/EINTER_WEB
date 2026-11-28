@@ -54,7 +54,7 @@ export function Proveedores() {
     setError(null);
 
     try {
-      const response = await fetchAPI(`/api/catalogo/proveedores`) as { items?: Record<string, unknown>[] };
+      const response = await fetchAPI(`/api/catalog/suppliers`) as { items?: Record<string, unknown>[] };
 
       // Map Odoo raw DB fields to Proveedor type
       const mapped: Proveedor[] = (response.items || []).map((item: Record<string, unknown>) => ({
@@ -175,7 +175,7 @@ export function Proveedores() {
       tiempo_envio: proveedorData.lead_time,
     };
 
-    const result = await fetchAPI("/(api)/proveedores", {
+    const result = await fetchAPI("/api/suppliers", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(apiData),
@@ -183,7 +183,7 @@ export function Proveedores() {
 
     if (result?.id) {
       try {
-        await fetchAPI(`/api/odoo/sync/proveedor/${result.id}`, { method: "POST" });
+        await fetchAPI(`/api/odoo/sync/suppliers/${result.id}`, { method: "POST" });
       } catch (odooErr) {
         console.warn("Odoo sync failed (supplier will sync later):", odooErr);
       }
@@ -200,7 +200,7 @@ export function Proveedores() {
     if (proveedorData.lead_time !== undefined)
       apiData.tiempo_envio = proveedorData.lead_time;
 
-    await fetchAPI(`/(api)/proveedores?id=${proveedorData.id}`, {
+    await fetchAPI(`/api/suppliers/${proveedorData.id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(apiData),
@@ -208,7 +208,7 @@ export function Proveedores() {
 
     if (proveedorData.id) {
       try {
-        await fetchAPI(`/api/odoo/sync/proveedor/${proveedorData.id}`, { method: "POST" });
+        await fetchAPI(`/api/odoo/sync/suppliers/${proveedorData.id}`, { method: "POST" });
       } catch (odooErr) {
         console.warn("Odoo sync failed (supplier will sync later):", odooErr);
       }
@@ -223,7 +223,7 @@ export function Proveedores() {
 
     setDeleteLoading(true);
     try {
-      await fetchAPI(`/(api)/proveedores?id=${proveedorToDelete.id}`, {
+      await fetchAPI(`/api/suppliers/${proveedorToDelete.id}`, {
         method: "DELETE",
       });
 

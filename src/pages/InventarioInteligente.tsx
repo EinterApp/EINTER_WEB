@@ -13,7 +13,7 @@ import {
   type InventoryStatus,
 } from "../lib/inventoryModel";
 
-// ─── Tipos de la recomendación MILP (GET /api/reabasto/contenedores) ────────
+// ─── Tipos de la recomendación MILP (GET /api/replenishment/containers) ─────
 type AsignacionSKU = {
   mod: string;
   desc: string;
@@ -176,7 +176,7 @@ export function InventarioInteligente() {
       let pg = 1;
       while (true) {
         const res = (await fetchAPI(
-          `/api/catalogo/productos?page=${pg}&pageSize=100`,
+          `/api/catalog/products?page=${pg}&pageSize=100`,
         )) as { items?: unknown[]; total?: number };
         const items: unknown[] = res.items || [];
         all.push(...items);
@@ -197,7 +197,7 @@ export function InventarioInteligente() {
   const fetchHdDailyDemand = useCallback(async () => {
     setLoadingHD(true);
     try {
-      const data = (await fetchAPI("/api/ventas-hd/demanda-diaria")) as {
+      const data = (await fetchAPI("/api/hd-sales/daily-demand")) as {
         mod: string;
         demanda_diaria: number;
       }[];
@@ -337,7 +337,7 @@ export function InventarioInteligente() {
     setLoadingRanking(true);
     setErrorRanking(null);
     try {
-      const res = (await fetchAPI("/api/reabasto/ranking")) as { data: RankingProveedor[] };
+      const res = (await fetchAPI("/api/replenishment/ranking")) as { data: RankingProveedor[] };
       setRanking(res.data);
     } catch (e) {
       setErrorRanking((e as Error).message);
@@ -358,7 +358,7 @@ export function InventarioInteligente() {
     setErrorFactory(null);
     try {
       const res = (await fetchAPI(
-        `/api/reabasto/contenedores?factory=${encodeURIComponent(factory)}`,
+        `/api/replenishment/containers?factory=${encodeURIComponent(factory)}`,
       )) as { soluciones: SolucionSerialized[] };
       setSolucionCache((prev) => ({ ...prev, [factory]: res.soluciones }));
     } catch (e) {
