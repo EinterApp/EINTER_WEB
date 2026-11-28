@@ -33,6 +33,17 @@ npm run dev
 
 The app will be available at `http://localhost:5173/`
 
+### Local Development Against Docker Stack (No Production Data)
+
+To run the web app against the isolated local MySQL + Auth emulator + API (`EINTER_API/docker`):
+
+```bash
+(cd ../EINTER_API && npm run local:up)
+npm run dev:local
+```
+
+For technical architecture, standardized English API endpoints, barcode modals, and engineering notes, see [`AGENTS.md`](AGENTS.md).
+
 ### Build
 
 Build the project for production:
