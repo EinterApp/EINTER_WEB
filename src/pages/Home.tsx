@@ -20,7 +20,7 @@ type TopProducto = { nombre: string; unidades: number };
 type ProductoAlerta = { nombre: string; diasCobertura: number; semaforo: "CRITICO" | "ALERTA" };
 type CatalogoProducto = { id: string; nombre: string; codigo: string };
 
-// Shape of GET /api/misc/dashboard and GET /api/productos (only the fields this page reads).
+// Shape of GET /api/dashboard and GET /api/products (only the fields this page reads).
 type DashboardResponse = {
   kpi: DashboardKpi;
   ventasSemanas: { semana_label?: string | null; semana_num: number; monto: number | string }[];

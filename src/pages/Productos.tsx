@@ -118,7 +118,7 @@ export function Productos() {
       // Fetch ALL products (every page), not just the current page
       const firstPageSize = 200;
       const firstRes = await fetchAPI(
-        `/api/catalogo/productos?page=1&pageSize=${firstPageSize}`
+        `/api/catalog/products?page=1&pageSize=${firstPageSize}`
       ) as { items?: Record<string, unknown>[]; total?: number; pageSize?: number };
 
       const total = firstRes.total || 0;
@@ -128,7 +128,7 @@ export function Productos() {
       const totalPagesToFetch = Math.ceil(total / pageSize);
       for (let p = 2; p <= totalPagesToFetch; p++) {
         const res = await fetchAPI(
-          `/api/catalogo/productos?page=${p}&pageSize=${pageSize}`
+          `/api/catalog/products?page=${p}&pageSize=${pageSize}`
         ) as { items?: Record<string, unknown>[] };
         allItems.push(...(res.items || []));
       }
@@ -191,7 +191,7 @@ export function Productos() {
     try {
       const firstPageSize = 200;
       const first = (await fetchAPI(
-        `/api/catalogo/productos?page=1&pageSize=${firstPageSize}`
+        `/api/catalog/products?page=1&pageSize=${firstPageSize}`
       )) as { items?: Record<string, unknown>[]; total?: number; pageSize?: number };
 
       const total = first.total || 0;
@@ -201,7 +201,7 @@ export function Productos() {
       const pages = Math.ceil(total / ps);
       for (let p = 2; p <= pages; p++) {
         const r = (await fetchAPI(
-          `/api/catalogo/productos?page=${p}&pageSize=${ps}`
+          `/api/catalog/products?page=${p}&pageSize=${ps}`
         )) as { items?: Record<string, unknown>[] };
         allItems.push(...(r.items || []));
       }
@@ -394,7 +394,7 @@ export function Productos() {
         inventario_standar_tarima: productData.standard_tarima ?? 0,
       };
 
-      const result = await fetchAPI("/(api)/productos", {
+      const result = await fetchAPI("/api/products", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -405,7 +405,7 @@ export function Productos() {
     // Sync to Odoo after creation
     if (result?.id) {
         try {
-          await fetchAPI(`/api/odoo/sync/producto/${result.id}`, { method: "POST" });
+          await fetchAPI(`/api/odoo/sync/products/${result.id}`, { method: "POST" });
         } catch (odooErr) {
           console.warn("Odoo sync failed (product will sync later):", odooErr);
         }
@@ -464,7 +464,7 @@ export function Productos() {
       if (productData.updated_at)
         apiData.updated_at = productData.updated_at;
 
-      await fetchAPI(`/(api)/productos?id=${productData.id}`, {
+      await fetchAPI(`/api/products/${productData.id}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -474,7 +474,7 @@ export function Productos() {
 
       // Sync to Odoo after update
       try {
-        await fetchAPI(`/api/odoo/sync/producto/${productData.id}`, { method: "POST" });
+        await fetchAPI(`/api/odoo/sync/products/${productData.id}`, { method: "POST" });
       } catch (odooErr) {
         console.warn("Odoo sync failed (product will sync later):", odooErr);
       }
@@ -489,7 +489,7 @@ export function Productos() {
 
     setDeleteLoading(true);
     try {
-      await fetchAPI(`/(api)/productos?id=${productToDelete.id}`, {
+      await fetchAPI(`/api/products/${productToDelete.id}`, {
         method: "DELETE",
       });
 
@@ -522,7 +522,7 @@ export function Productos() {
     // the original, unchanged values. See AGENTS.md for the user report this fixes.
     setEditLoadingId(product.id ?? null);
     try {
-      const raw = (await fetchAPI(`/(api)/productos?id=${product.id}`)) as Record<string, unknown>;
+      const raw = (await fetchAPI(`/api/products/${product.id}`)) as Record<string, unknown>;
       setModalMode("edit");
       setSelectedProduct({
         ...(raw as unknown as Product),

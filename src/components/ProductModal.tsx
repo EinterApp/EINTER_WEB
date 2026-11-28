@@ -121,7 +121,7 @@ export function ProductModal({
   const fetchSuppliers = async () => {
     setLoadingSuppliers(true);
     try {
-      const data = await fetchAPI("/api/catalogo/proveedores") as { items?: { id_proveedor?: number; id?: number; nombre?: string; name?: string }[] };
+      const data = await fetchAPI("/api/catalog/suppliers") as { items?: { id_proveedor?: number; id?: number; nombre?: string; name?: string }[] };
       const suppliersList = data.items || [];
       setSuppliers(
         suppliersList.map((supplier: { id_proveedor?: number; id?: number; nombre?: string; name?: string }) => ({
@@ -140,7 +140,7 @@ export function ProductModal({
   const fetchCategories = async () => {
     setLoadingCategories(true);
     try {
-      const data = await fetchAPI("/api/categorias") as { items?: { id: number; name: string }[] };
+      const data = await fetchAPI("/api/categories") as { items?: { id: number; name: string }[] };
       const categoriesList = data.items || [];
       setCategories(
         categoriesList.map((category: { id: number; name: string }) => ({
