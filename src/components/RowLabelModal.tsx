@@ -7,7 +7,7 @@ import { useDarkMode } from "../context/DarkModeContext";
 // the row plus a table of every tarima position in it (in physical order)
 // with the products and quantities each position holds. Meant to be stuck on
 // the row itself, not on each individual tarima. Reads from our own BD via
-// GET /api/islas/:id/tarimas and GET /api/tarimas/:id/cartones.
+// GET /api/islands/:id/pallets and GET /api/pallets/:id/cartons.
 interface FilaIsla {
   id_isla: number;
   master_sku: string;
@@ -26,7 +26,7 @@ interface FilaEtiquetaModalProps {
   onClose: () => void;
 }
 
-export function FilaEtiquetaModal({ visible, isla, onClose }: FilaEtiquetaModalProps) {
+export function RowLabelModal({ visible, isla, onClose }: FilaEtiquetaModalProps) {
   useDarkMode();
   const svgRef = useRef<SVGSVGElement>(null);
   const [posiciones, setPosiciones] = useState<FilaPosicion[]>([]);
@@ -43,13 +43,13 @@ export function FilaEtiquetaModal({ visible, isla, onClose }: FilaEtiquetaModalP
     (async () => {
       try {
         const tarimasRes = (await fetchAPI(
-          `/api/islas/${isla.id_isla}/tarimas`
+          `/api/islands/${isla.id_isla}/pallets`
         )) as { items: { id_tarima: number; sku: string; numero_secuencial: number }[] };
 
         const withCartones = await Promise.all(
           tarimasRes.items.map(async (t) => {
             const cartonesRes = (await fetchAPI(
-              `/api/tarimas/${t.id_tarima}/cartones`
+              `/api/pallets/${t.id_tarima}/cartons`
             )) as { items: { nombre_producto: string; cantidad_unidades: number }[] };
 
             const porProducto = new Map<string, number>();

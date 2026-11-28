@@ -16,7 +16,7 @@ interface ProveedorModalProps {
   mode: "create" | "edit";
 }
 
-export function ProveedorModal({
+export function SupplierModal({
   visible,
   proveedor,
   onClose,

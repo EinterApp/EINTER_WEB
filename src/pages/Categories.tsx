@@ -82,7 +82,7 @@ const AccordionItem: React.FC<AccordionItemProps> = ({
   );
 };
 
-export function Categorias() {
+export function Categories() {
   useDarkMode(); // Initialize dark mode context
   const [data, setData] = useState<Category[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -111,7 +111,7 @@ export function Categorias() {
       setError(null);
 
       // Cargar solo categorías
-      const categoriesData = await fetchAPI("/api/categorias?page=1&pageSize=100") as { items?: { id: number; name: string }[] };
+      const categoriesData = await fetchAPI("/api/categories?page=1&pageSize=100") as { items?: { id: number; name: string }[] };
       const categories = categoriesData.items || [];
 
       // Crear estructura de categorías sin productos
@@ -148,7 +148,7 @@ export function Categorias() {
     // Cargar productos de la categoría seleccionada
     try {
       setLoadingCategory(true);
-      const categoryData = await fetchAPI(`/api/categorias?id=${categoryId}`) as { productos?: Record<string, unknown>[]; products?: Record<string, unknown>[]; items?: Record<string, unknown>[]; data?: Record<string, unknown>[] };
+      const categoryData = await fetchAPI(`/api/categories/${categoryId}`) as { productos?: Record<string, unknown>[]; products?: Record<string, unknown>[]; items?: Record<string, unknown>[]; data?: Record<string, unknown>[] };
       const products = categoryData.productos || categoryData.products || categoryData.items || categoryData.data || [];
       
       setData((prevData) =>
@@ -190,12 +190,12 @@ export function Categorias() {
     name: string;
   }) => {
     if (categoryData.id) {
-      await fetchAPI(`/api/categorias?id=${categoryData.id}`, {
+      await fetchAPI(`/api/categories/${categoryData.id}`, {
         method: "PUT",
         body: JSON.stringify({ nombre_categoria: categoryData.name }),
       });
     } else {
-      await fetchAPI("/api/categorias", {
+      await fetchAPI("/api/categories", {
         method: "POST",
         body: JSON.stringify({ nombre_categoria: categoryData.name }),
       });
@@ -206,7 +206,7 @@ export function Categorias() {
 
   const handleDeleteCategory = async () => {
     if (!categoryToDelete) return;
-    await fetchAPI(`/api/categorias?id=${categoryToDelete.id}`, {
+    await fetchAPI(`/api/categories/${categoryToDelete.id}`, {
       method: "DELETE",
     });
     loadData();

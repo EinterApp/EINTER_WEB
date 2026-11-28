@@ -161,6 +161,6 @@ export const api = {
     }),
 
   // Dashboard
-  getDashboard: () => apiRequest('/api/misc/dashboard'),
-  getProductosCatalogo: (pageSize = 50) => apiRequest(`/api/productos?pageSize=${pageSize}`),
+  getDashboard: () => apiRequest('/api/dashboard'),
+  getProductosCatalogo: (pageSize = 50) => apiRequest(`/api/products?pageSize=${pageSize}`),
 };

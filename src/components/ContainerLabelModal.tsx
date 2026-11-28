@@ -22,7 +22,7 @@ interface ContenedorEtiquetaModalProps {
   onClose: () => void;
 }
 
-export function ContenedorEtiquetaModal({ visible, detail, onClose }: ContenedorEtiquetaModalProps) {
+export function ContainerLabelModal({ visible, detail, onClose }: ContenedorEtiquetaModalProps) {
   useDarkMode();
   const svgRef = useRef<SVGSVGElement>(null);
 

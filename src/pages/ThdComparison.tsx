@@ -233,7 +233,7 @@ function ExpandedPanel({
     setSubmitMsg(null);
     try {
       await fetchAPI(
-        `/api/thd/discrepancia/${encodeURIComponent(row.numero_folio)}`,
+        `/api/thd/discrepancies/${encodeURIComponent(row.numero_folio)}`,
         {
           method: "PATCH",
           body: JSON.stringify({ cantidad_real: Number(cantidadReal), notas }),
@@ -622,7 +622,7 @@ function OrdenModal({ orden, onClose, modalData, modalLoading, modalError }: Ord
 
 // ── Component ──────────────────────────────────────────────────────────────────
 
-export function THDComparativo() {
+export function ThdComparison() {
   useDarkMode();
 
   // Shared filter state
@@ -692,10 +692,10 @@ export function THDComparativo() {
     setLoading(true);
     setError(null);
     try {
-      const params = new URLSearchParams({ anio: String(a), categoria: c });
-      if (m !== 0) params.set("mes", String(m));
-      if (d !== 0) params.set("dia", String(d));
-      const raw = (await fetchAPI(`/api/thd/comparativo?${params}`)) as Record<string, unknown>;
+      const params = new URLSearchParams({ year: String(a), category: c });
+      if (m !== 0) params.set("month", String(m));
+      if (d !== 0) params.set("day", String(d));
+      const raw = (await fetchAPI(`/api/thd/comparison?${params}`)) as Record<string, unknown>;
       const rows = (raw.data ?? raw.rows ?? raw.items ?? []) as ComparativoRow[];
       setData(Array.isArray(rows) ? rows : []);
       setSummary((raw.summary ?? null) as ComparativoSummary | null);
@@ -710,10 +710,10 @@ export function THDComparativo() {
     setOrdenLoading(true);
     setOrdenError(null);
     try {
-      const params = new URLSearchParams({ anio: String(a), categoria: c });
-      if (m !== 0) params.set("mes", String(m));
-      if (d !== 0) params.set("dia", String(d));
-      const raw = (await fetchAPI(`/api/thd/comparativo/ordenes?${params}`)) as Record<string, unknown>;
+      const params = new URLSearchParams({ year: String(a), category: c });
+      if (m !== 0) params.set("month", String(m));
+      if (d !== 0) params.set("day", String(d));
+      const raw = (await fetchAPI(`/api/thd/comparison/orders?${params}`)) as Record<string, unknown>;
       const rows = (raw.data ?? raw.rows ?? raw.items ?? []) as OrdenRow[];
       setOrdenData(Array.isArray(rows) ? rows : []);
       setOrdenSummary((raw.summary ?? null) as OrdenSummary | null);
@@ -744,7 +744,7 @@ export function THDComparativo() {
       setModalError(null);
       try {
         const raw = (await fetchAPI(
-          `/api/thd/comparativo/detalle-orden/${encodeURIComponent(selectedOrden.numero_folio)}`
+          `/api/thd/comparison/orders/${encodeURIComponent(selectedOrden.numero_folio)}`
         )) as Record<string, unknown>;
         const rows = (raw.data ?? []) as DetalleOrdenRow[];
         setModalData(Array.isArray(rows) ? rows : []);
@@ -764,7 +764,7 @@ export function THDComparativo() {
     setProductoOrdenesLoading(true);
     try {
       const raw = (await fetchAPI(
-        `/api/thd/comparativo/ordenes-por-producto/${encodeURIComponent(master_sku)}?anio=${anio}&categoria=${encodeURIComponent(categoria)}`
+        `/api/thd/comparison/products/${encodeURIComponent(master_sku)}/orders?year=${anio}&category=${encodeURIComponent(categoria)}`
       )) as { data?: OrdenRow[] };
       setProductoOrdenesData(raw.data ?? []);
     } catch (err) {
@@ -793,7 +793,7 @@ export function THDComparativo() {
 
     if (hdSkuCatalog.length === 0) {
       setHdSkuCatalogLoading(true);
-      fetchAPI("/api/productos?pageSize=100000")
+      fetchAPI("/api/products?pageSize=100000")
         .then((raw) => {
           const items = ((raw as { items?: { sku: string; name: string }[] }).items ?? []);
           setHdSkuCatalog(items.filter((p) => p.sku).map((p) => ({ sku: p.sku, name: p.name ?? "" })));
@@ -803,7 +803,7 @@ export function THDComparativo() {
     }
 
     const currentAnio = anio;
-    fetchAPI(`/api/thd/comparativo/ordenes?anio=${currentAnio}`)
+    fetchAPI(`/api/thd/comparison/orders?year=${currentAnio}`)
       .then((raw) => {
         const rows = ((raw as { data?: { numero_folio: string }[] }).data ?? []);
         const nums = rows.map((r) => Number(r.numero_folio)).filter((n) => !isNaN(n) && n > 0);
@@ -855,7 +855,7 @@ export function THDComparativo() {
     setHdLoading(true);
     setHdError(null);
     try {
-      await fetchAPI("/api/thd/orden", {
+      await fetchAPI("/api/thd/orders", {
         method: "POST",
         body: JSON.stringify({
           numero_folio: folioStr,

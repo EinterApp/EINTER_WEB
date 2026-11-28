@@ -67,7 +67,7 @@ function formatMoney(v: number, moneda = "MXN") {
   return v.toLocaleString("es-MX", { style: "currency", currency: moneda, minimumFractionDigits: 2 });
 }
 
-export function Facturas() {
+export function Invoices() {
   useDarkMode();
 
   const [ordenes, setOrdenes] = useState<OrdenRow[]>([]);
@@ -113,9 +113,9 @@ export function Facturas() {
     setLoading(true);
     setError(null);
     Promise.all([
-      fetchAPI("/api/contenedores?page=1&limit=100000"),
-      fetchAPI("/api/facturas"),
-      fetchAPI("/api/facturas/resumen/ultimo-anio"),
+      fetchAPI("/api/containers?page=1&limit=100000"),
+      fetchAPI("/api/invoices"),
+      fetchAPI("/api/invoices/summary/last-year"),
     ])
       .then(([contenedoresRaw, pagadosRaw, resumenRaw]) => {
         if (cancelled) return;
@@ -141,7 +141,7 @@ export function Facturas() {
     setOrdenDetalle(null);
     setOrdenDetalleLoading(true);
     try {
-      const raw = (await fetchAPI(`/api/contenedores/${encodeURIComponent(folio)}`)) as OrdenDetalle;
+      const raw = (await fetchAPI(`/api/containers/${encodeURIComponent(folio)}`)) as OrdenDetalle;
       setOrdenDetalle(raw);
     } catch (err) {
       setToast({ ok: false, text: (err as Error).message });
@@ -155,7 +155,7 @@ export function Facturas() {
     try {
       const token = await auth.currentUser!.getIdToken(true);
       const apiBase = import.meta.env.VITE_API_BASE_URL || "";
-      const res = await fetch(`${apiBase}/api/contenedores/${encodeURIComponent(folio)}/pdf`, {
+      const res = await fetch(`${apiBase}/api/containers/${encodeURIComponent(folio)}/pdf`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -175,7 +175,7 @@ export function Facturas() {
     setPagoDetalleLoading(true);
     setPagoMonto(""); setPagoTasa(""); setPagoFecha(getMonterreyDateISO()); setPagoError(null);
     try {
-      const raw = (await fetchAPI(`/api/facturas/${encodeURIComponent(folio)}`)) as PagoDetalle;
+      const raw = (await fetchAPI(`/api/invoices/${encodeURIComponent(folio)}`)) as PagoDetalle;
       setPagoDetalle(raw);
     } catch (err) {
       setToast({ ok: false, text: (err as Error).message });
@@ -195,7 +195,7 @@ export function Facturas() {
     setPagoSaving(true);
     setPagoError(null);
     try {
-      await fetchAPI(`/api/facturas/${encodeURIComponent(pagoFolio)}/pagos`, {
+      await fetchAPI(`/api/invoices/${encodeURIComponent(pagoFolio)}/payments`, {
         method: "POST",
         body: JSON.stringify({ monto: Number(pagoMonto), tasa: Number(pagoTasa), fecha: pagoFecha }),
       });
@@ -218,11 +218,11 @@ export function Facturas() {
     setPagoSaving(true);
     setPagoError(null);
     try {
-      await fetchAPI(`/api/facturas/${encodeURIComponent(folio)}/pagos`, {
+      await fetchAPI(`/api/invoices/${encodeURIComponent(folio)}/payments`, {
         method: "POST",
         body: JSON.stringify({ monto: Number(pagoMonto), tasa: Number(pagoTasa), fecha: pagoFecha }),
       });
-      const [pagadosRaw] = await Promise.all([fetchAPI("/api/facturas")]);
+      const [pagadosRaw] = await Promise.all([fetchAPI("/api/invoices")]);
       const map: Record<string, PagadoRow> = {};
       for (const p of (pagadosRaw as { data: PagadoRow[] }).data ?? []) {
         map[p.folio_orden] = { ...p, pagado: Number(p.pagado), pagado_mxn: Number(p.pagado_mxn) };
@@ -250,7 +250,7 @@ export function Facturas() {
     setImporteSaving(true);
     setImporteError(null);
     try {
-      await fetchAPI(`/api/facturas/${encodeURIComponent(importeFolio)}/importe`, {
+      await fetchAPI(`/api/invoices/${encodeURIComponent(importeFolio)}/amount`, {
         method: "PUT",
         body: JSON.stringify({ importe_factura: Number(importeValor), importe_factura_moneda: importeMoneda }),
       });

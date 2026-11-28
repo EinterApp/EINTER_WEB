@@ -170,7 +170,7 @@ function FacturaModal({ folio, onClose, onToast }: {
   const [notas, setNotas] = useState("");
   const [precios, setPrecios] = useState<Record<string, string>>({});
 
-  const base = `/api/facturas-cliente`;
+  const base = `/api/customer-invoices`;
 
   const applyData = (d: FacturaSalidaData) => {
     setData(d);
@@ -188,7 +188,7 @@ function FacturaModal({ folio, onClose, onToast }: {
     setPrecios(Object.fromEntries(d.lineas.map((l) => [l.master_sku, String(l.precio_unitario)])));
     const est = d.factura?.estado;
     if (est === "en_revision" || est === "aprobada") {
-      fetchAPI(`${base}/salidas/${encodeURIComponent(folio)}/revision`)
+      fetchAPI(`${base}/exits/${encodeURIComponent(folio)}/review`)
         .then((r) => setRevision(r as FacturaRevision))
         .catch((err: Error) => setError(err.message));
     } else {
@@ -200,9 +200,9 @@ function FacturaModal({ folio, onClose, onToast }: {
     setLoading(true);
     setError(null);
     Promise.all([
-      fetchAPI(`${base}/salidas/${encodeURIComponent(folio)}`),
-      fetchAPI(`${base}/clientes`),
-      fetchAPI(`${base}/catalogos`),
+      fetchAPI(`${base}/exits/${encodeURIComponent(folio)}`),
+      fetchAPI(`${base}/customers`),
+      fetchAPI(`${base}/catalogs`),
     ])
       .then(([d, c, k]) => {
         applyData(d as FacturaSalidaData);
@@ -223,7 +223,8 @@ function FacturaModal({ folio, onClose, onToast }: {
     setBusy(true);
     setError(null);
     try {
-      const d = (await fetchAPI(`${base}/salidas/${encodeURIComponent(folio)}/${accion}`, {
+      const endpointAction = accion === "aprobar" ? "approve" : "reject";
+      const d = (await fetchAPI(`${base}/exits/${encodeURIComponent(folio)}/${endpointAction}`, {
         method: "POST",
         body: JSON.stringify(accion === "rechazar" ? { motivo } : {}),
       })) as FacturaSalidaData;
@@ -257,11 +258,11 @@ function FacturaModal({ folio, onClose, onToast }: {
     setBusy(true);
     setError(null);
     try {
-      let d = (await fetchAPI(`${base}/salidas/${encodeURIComponent(folio)}`, {
+      let d = (await fetchAPI(`${base}/exits/${encodeURIComponent(folio)}`, {
         method: "PUT", body: JSON.stringify(payload()),
       })) as FacturaSalidaData;
       if (enviar) {
-        d = (await fetchAPI(`${base}/salidas/${encodeURIComponent(folio)}/enviar`, { method: "POST" })) as FacturaSalidaData;
+        d = (await fetchAPI(`${base}/exits/${encodeURIComponent(folio)}/send`, { method: "POST" })) as FacturaSalidaData;
         onToast({ ok: true, text: "Venta y borrador de factura generados en Odoo; pendientes de revisión." });
       } else {
         onToast({ ok: true, text: "Borrador de factura guardado." });
@@ -270,7 +271,7 @@ function FacturaModal({ folio, onClose, onToast }: {
     } catch (err) {
       setError((err as Error).message);
       // The failed push leaves the error on the row; reload to show state.
-      fetchAPI(`${base}/salidas/${encodeURIComponent(folio)}`).then((d) => applyData(d as FacturaSalidaData)).catch(() => {});
+      fetchAPI(`${base}/exits/${encodeURIComponent(folio)}`).then((d) => applyData(d as FacturaSalidaData)).catch(() => {});
     } finally {
       setBusy(false);
     }
@@ -504,7 +505,7 @@ function DetalleModal({ folio, onClose }: { folio: string | null; onClose: () =>
     if (!folio) return;
     setLoading(true);
     setError(null);
-    fetchAPI(`/api/thd/salidas/${encodeURIComponent(folio)}`)
+    fetchAPI(`/api/thd/exits/${encodeURIComponent(folio)}`)
       .then((data) => setProductos(data as SalidaProducto[]))
       .catch((err: Error) => setError(err.message))
       .finally(() => setLoading(false));
@@ -776,7 +777,7 @@ function SalidaFormModal({
   }, [formError]);
 
   useEffect(() => {
-    fetchAPI("/api/thd/articulos")
+    fetchAPI("/api/thd/products")
       .then((data) => setArticulos(data as ArticuloAC[]))
       .catch(() => {/* non-fatal */});
   }, []);
@@ -842,9 +843,9 @@ function SalidaFormModal({
     setSaving(true);
     try {
       if (mode === "create") {
-        await fetchAPI("/api/thd/salidas", { method: "POST", body: JSON.stringify(payload) });
+        await fetchAPI("/api/thd/exits", { method: "POST", body: JSON.stringify(payload) });
       } else {
-        await fetchAPI(`/api/thd/salidas/${encodeURIComponent(form.numero_folio.trim())}`, {
+        await fetchAPI(`/api/thd/exits/${encodeURIComponent(form.numero_folio.trim())}`, {
           method: "PUT",
           body: JSON.stringify(payload),
         });
@@ -1082,7 +1083,7 @@ function SalidaFormModal({
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
-export function Salidas() {
+export function Exits() {
   useDarkMode();
   const { isSuperAdmin } = useRole();
 
@@ -1131,9 +1132,9 @@ export function Salidas() {
     setError(null);
     try {
       const params = new URLSearchParams();
-      if (filterYear !== "") params.set("anio", String(filterYear));
-      if (filterMonth !== "") params.set("mes", String(filterMonth));
-      const data = (await fetchAPI(`/api/thd/salidas?${params}`)) as SalidaFolio[];
+      if (filterYear !== "") params.set("year", String(filterYear));
+      if (filterMonth !== "") params.set("month", String(filterMonth));
+      const data = (await fetchAPI(`/api/thd/exits?${params}`)) as SalidaFolio[];
       setSalidas(data);
       setPage(1);
     } catch (err) {
@@ -1167,7 +1168,7 @@ export function Salidas() {
   const handleOpenEdit = async (s: SalidaFolio) => {
     let productos: ProductoFormRow[] = [newProductoRow()];
     try {
-      const data = (await fetchAPI(`/api/thd/salidas/${encodeURIComponent(s.numero_folio)}`)) as SalidaProducto[];
+      const data = (await fetchAPI(`/api/thd/exits/${encodeURIComponent(s.numero_folio)}`)) as SalidaProducto[];
       if (data.length > 0) {
         productos = data.map((p) => ({
           id: crypto.randomUUID(),
@@ -1200,7 +1201,7 @@ export function Salidas() {
     }
     setConfirmandoFolio(folio);
     try {
-      await fetchAPI(`/api/thd/salidas/${encodeURIComponent(folio)}/confirmar`, { method: "PATCH" });
+      await fetchAPI(`/api/thd/exits/${encodeURIComponent(folio)}/confirm`, { method: "PATCH" });
       setToast({ ok: true, text: `Salida "${folio}" confirmada; se generan la venta y la factura en Odoo.` });
       fetchSalidas();
     } catch (err) {
@@ -1213,7 +1214,7 @@ export function Salidas() {
   const handleBotarSalida = async (folio: string) => {
     setBotandoFolio(folio);
     try {
-      await fetchAPI(`/api/thd/salidas/${encodeURIComponent(folio)}/botar`, { method: "PATCH" });
+      await fetchAPI(`/api/thd/exits/${encodeURIComponent(folio)}/reject`, { method: "PATCH" });
       setToast({ ok: true, text: `Salida "${folio}" botada de vuelta a borrador.` });
       fetchSalidas();
     } catch (err) {
@@ -1228,7 +1229,7 @@ export function Salidas() {
     setDeleteLoading(true);
     setDeleteError(null);
     try {
-      await fetchAPI(`/api/thd/salidas/${encodeURIComponent(deleteFolio.numero_folio)}`, { method: "DELETE" });
+      await fetchAPI(`/api/thd/exits/${encodeURIComponent(deleteFolio.numero_folio)}`, { method: "DELETE" });
       setDeleteFolio(null);
       fetchSalidas();
     } catch (err) {

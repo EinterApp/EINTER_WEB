@@ -1,6 +1,6 @@
 # AGENTS.md — EinterWeb
 
-Frontend React + TypeScript + Vite. **Es la fuente de verdad del sistema**: sus llamadas a `EINTER_API` son las que el cliente ya usa y valida en producción. Si necesitas saber "cuál es el endpoint correcto" para algo, mira primero cómo lo llama esta app antes de confiar en `EinterBodegaApp` o en documentación vieja (Postman, etc.) — mobile tiene varias llamadas rotas por desincronización (ver [`../README.md`](../README.md)).
+Frontend React + TypeScript + Vite. **Es la fuente de verdad del sistema**: sus llamadas a `EINTER_API` son las que el cliente ya usa y valida en producción. Al 2026-11-28, los tres repos (`EINTER_API`, `EINTER_WEB` y `EINTER_MOBILE`) están alineados sobre las rutas REST estandarizadas en inglés.
 
 ## Arrancar en local
 
@@ -8,6 +8,15 @@ Frontend React + TypeScript + Vite. **Es la fuente de verdad del sistema**: sus 
 npm install
 npm run dev   # Vite, puerto 5173
 ```
+
+## Probar en local sin datos reales
+
+```bash
+(cd ../EINTER_API && npm run local:up)   # MySQL + Auth emulado + API en :3055
+npm run dev:local                        # esta web contra ese entorno (.env.docker)
+```
+
+"Iniciar sesión con Google" debe abrir el emulador para elegir una cuenta de prueba. **No verificado en un navegador real:** el inicio de sesión contra el emulador se probó por consola.
 
 ## Bug: editar un producto podía "no guardar" (corregido 2026-10-02)
 
@@ -36,9 +45,9 @@ Pendiente, no resuelto en esta pasada: solo `Productos.tsx` tiene el chequeo de 
 
 ## Patrones de acceso a datos que conviene conocer
 
-- **`productos`/`proveedores` se leen de dos formas distintas según la pantalla**: `/api/odoo/productos` (catálogo espejo de Odoo, paginado, usado en `Productos.tsx`/`InventarioInteligente.tsx`/`PedidoPersonalizado.tsx`/autocompletados) vs. `/api/productos?id=` (CRUD directo contra nuestra BD, usado solo en el flujo de edición de `Productos.tsx`). No son intercambiables — el primero es de solo lectura y viene de Odoo, el segundo es la fuente editable.
-- Varias pantallas (`Productos.tsx`, `InventarioInteligente.tsx`, `PedidoPersonalizado.tsx`) reimplementan cada una su propio loop de paginación contra `/api/odoo/productos` — si tocas ese endpoint, revisa los tres sitios, no solo uno.
-- Subida/descarga de PDF (`Entradas.tsx` líneas ~553/579, `THDComparativo.tsx` ~886) usa `fetch()` nativo en vez de `fetchAPI`, porque necesitan `FormData`/blob. Es intencional, no un descuido — no lo "arregles" migrándolo a `fetchAPI` sin más, tendrías que replicar el manejo de auth manualmente.
+- **`products`/`suppliers` se leen de dos formas distintas según la pantalla**: `/api/catalog/products` (y `/api/catalog/suppliers`, catálogo paginado de lectura usado en `Products.tsx`/`CustomOrder.tsx`/autocompletados) vs. `/api/products` (CRUD directo contra nuestra BD, usado en edición/creación).
+- Varias pantallas (`Products.tsx`, `CustomOrder.tsx`, etc.) tienen su propio loop de paginación contra `/api/catalog/products` — si tocas ese endpoint, revisa todos los consumidores.
+- Subida/descarga de PDF (`Entradas`/`THD`) usa `fetch()` nativo en vez de `fetchAPI`, porque necesitan `FormData`/blob. Es intencional, no un descuido — no lo "arregles" migrándolo a `fetchAPI` sin más, tendrías que replicar el manejo de auth manualmente.
 
 ## Componentes eliminados 2026-08-10
 
@@ -48,15 +57,16 @@ Pendiente, no resuelto en esta pasada: solo `Productos.tsx` tiene el chequeo de 
 
 **El barcode siempre se lee de la BD, nunca de Odoo.** El `master_sku` de un producto nace en nuestra BD al darlo de alta — Odoo no lo genera (ni siquiera sincronizamos su campo `barcode`, solo `default_code`). Un endpoint `GET /api/odoo/barcode/:code` que consultaba Odoo en vivo se construyó y se **borró el mismo día** al caer en cuenta de esto — si ves referencias a él en el historial, es ese experimento fallido.
 
-Tres modales de impresión, todos con el mismo patrón (`jsbarcode` CODE128 + `window.print()` + `#etiqueta-print-area` con CSS `@media print` en `src/index.css`):
+Cuatro modales de impresión, todos con el mismo patrón (`jsbarcode` `CODE128` + `window.print()` + `#etiqueta-print-area` con CSS `@media print` en `src/index.css`) y **verificados contra el escáner ML Kit universal de `EINTER_MOBILE`** (`GET /api/warehouse/code-lookup?code=`):
 
-- **`src/components/EtiquetaModal.tsx`** — un producto. Botón "Etiqueta" por fila en `Productos.tsx`. Lee `GET /api/productos?search=<sku>` y filtra por coincidencia exacta de `sku`.
-- **`src/components/ContenedorEtiquetaModal.tsx`** — barcode "master" de un contenedor (folio → varios productos con cantidad). Botón "Imprimir barcode" en el modal de detalle de `Entradas.tsx`, reusa los datos que ese modal ya cargó de `GET /api/contenedores/:folio` (sin fetch propio).
-- **`src/components/TarimaEtiquetaModal.tsx`** — barcode "master" de una tarima (SKU → varios cartones, potencialmente de productos distintos — el schema ya lo soporta, ver `EINTER_API/AGENTS.md`). Se busca por SKU desde un buscador nuevo en `src/pages/Ubicaciones.tsx` (arriba del árbol mock existente — no lo toques, esa página sigue siendo 100% datos de ejemplo sin conectar, ver más abajo) vía `GET /api/tarimas?sku=` + `GET /api/tarimas/:id/cartones`.
+- **`src/components/ProductLabelModal.tsx`** — un producto (`master_sku`).
+- **`src/components/ContainerLabelModal.tsx`** — barcode "master" de un contenedor (`folio` → productos con cantidad).
+- **`src/components/PalletLabelModal.tsx`** — barcode "master" de una tarima (`sku` → cartones, potencialmente de varios productos).
+- **`src/components/RowLabelModal.tsx`** — barcode de una fila/isla (`master_sku`).
 
-Si agregas impresión de etiquetas en otra pantalla, reusa uno de estos tres patrones en vez de reimplementar `jsbarcode`/`window.print()` desde cero.
+Si agregas impresión de etiquetas en otra pantalla, reusa uno de estos cuatro patrones en vez de reimplementar `jsbarcode`/`window.print()` desde cero.
 
-## `src/pages/Ubicaciones.tsx` — mayormente mock, no lo confundas con datos reales
+## `src/pages/Locations.tsx` — mayormente mock, no lo confundas con datos reales
 
 Todo el árbol Ubicación→Master QR→Sub-QR de esta página usa `sampleData` hardcodeado en el propio archivo — no llama a ningún endpoint, no refleja la BD real. El único bloque real en esta página es `TarimaBarcodeSearch` (agregado 2026-08-10, arriba del header del árbol mock), que sí habla con el backend. Si vas a conectar el resto de la página a datos reales, probablemente quieras generalizar ese mismo patrón a islas/tarimas reales en vez de mantener `sampleData`.
 
@@ -72,8 +82,14 @@ Pase de cierre del proyecto: se borraron `src/components/VentaModal.tsx` (sin im
 
 ## Antes de tocar algo, ten en cuenta
 
-- `EinterBodegaApp` (Android) es un cliente separado del mismo backend, y hoy está desincronizado en varios endpoints. Un cambio aquí que además debería aplicar a mobile no se propaga solo — hay que replicarlo a mano (ver `../EinterBodegaApp/AGENTS.md`).
+- `EINTER_MOBILE` (Android) es un cliente separado del mismo backend. Un cambio de contrato en `EINTER_API` que afecte al móvil no se propaga solo — hay que mantener sincronizados `EINTER_MOBILE/app/src/main/java/com/einter/dev/movil/api/ApiService.kt` y sus pruebas (`EINTER_MOBILE/AGENTS.md`).
+
+## Estandarización de rutas REST y archivos a inglés — 2026-11-28
+- Todas las llamadas HTTP de `EINTER_WEB` se migraron a los endpoints REST en inglés de `EINTER_API`: `/api/products`, `/api/suppliers`, `/api/categories`, `/api/catalog/*`, `/api/dashboard`, `/api/locations`, `/api/islands`, `/api/pallets`, `/api/cartons`, `/api/warehouse/*`, `/api/containers`, `/api/movements`, `/api/history`, `/api/shrinkage`, `/api/thd/exits`, `/api/hd-sales`, `/api/invoices`, `/api/customer-invoices`, `/api/variable-costs`, `/api/replenishment` y `/api/audit-logs`.
+- Páginas, componentes y docs estandarizados a inglés (`Products.tsx`, `Entries.tsx`, `Exits.tsx`, `Movements.tsx`, `Locations.tsx`, `Shrinkage.tsx`, `AuditLogs.tsx`, `Categories.tsx`, `CustomOrder.tsx`, `HomeDepotSales.tsx`, `Invoices.tsx`, `SmartInventory.tsx`, `Suppliers.tsx`, `ThdComparison.tsx`, `VariableCosts.tsx`; `ProductLabelModal.tsx`, `ContainerLabelModal.tsx`, `PalletLabelModal.tsx`, `RowLabelModal.tsx`, `SupplierModal.tsx`; `docs/ARCHITECTURE-C4.md`, `docs/HD-Orders-Comparison-Exits.md`).
+- Suite de verificación automatizada agregada (`npm test` → `node --test test/*.test.mjs`).
+- Los 4 componentes de etiquetas generan `CODE128` verificado de extremo a extremo con el escáner universal de `EINTER_MOBILE`.
 
 ## Movimientos ahora lee el historial unificado — 2026-11-01
-`src/pages/Movimientos.tsx` ya no usa `/api/catalogo/entradas` ni `/api/catalogo/salidas` (leían la tabla `movimientos`, que ya no recibe entradas/salidas nuevas). Ahora lee `GET /api/historial?pageSize=100000` (contenedores, salidas THD, órdenes, transferencias y merma) con columnas Fecha, Tipo, Documento, Referencia, SKU, Producto, Cantidad y Ubicación. Esos dos endpoints de catálogo ya no los usa nadie en la web.
+El módulo de Movimientos ya no usa `/api/catalogo/entradas` ni `/api/catalogo/salidas` (leían la tabla `movimientos`, que ya no recibe entradas/salidas nuevas). Lee `GET /api/history?pageSize=100000` (antes `/api/historial`, con contenedores, salidas THD, transferencias y merma) con columnas Fecha, Tipo, Documento, Referencia, SKU, Producto, Cantidad y Ubicación.
 Además `src/index.css` pinta `html.dark`/`body` con el mismo fondo oscuro de la página (`#111827`) y `color-scheme: dark`, para que el rebote al hacer scroll de más no deje ver el blanco del navegador (aplica a toda la web).

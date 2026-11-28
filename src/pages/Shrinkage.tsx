@@ -40,7 +40,7 @@ function GestionarRazonesModal({
     setError(null);
     setSaving(true);
     try {
-      await fetchAPI("/api/merma/razones", {
+      await fetchAPI("/api/shrinkage/reasons", {
         method: "POST",
         body: JSON.stringify({ nombre: nombre.trim() }),
       });
@@ -57,7 +57,7 @@ function GestionarRazonesModal({
     if (!window.confirm("¿Desactivar esta razón? Ya no aparecerá para nuevas mermas.")) return;
     setDeletingId(id_razon);
     try {
-      await fetchAPI(`/api/merma/razones/${id_razon}`, { method: "DELETE" });
+      await fetchAPI(`/api/shrinkage/reasons/${id_razon}`, { method: "DELETE" });
       onChanged();
     } catch (err) {
       setError((err as Error).message);
@@ -119,7 +119,7 @@ function formatDate(iso: string) {
   return d.toLocaleString("es-MX", { dateStyle: "short", timeStyle: "short" });
 }
 
-export function Merma() {
+export function Shrinkage() {
   useDarkMode();
   const { isSuperAdmin } = useRole();
 
@@ -162,7 +162,7 @@ export function Merma() {
   }, [toast]);
 
   useEffect(() => {
-    fetchAPI("/api/merma/razones")
+    fetchAPI("/api/shrinkage/reasons")
       .then((raw) => setRazones(raw as Razon[]))
       .catch(() => {/* non-fatal */});
   }, []);
@@ -171,7 +171,7 @@ export function Merma() {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    fetchAPI("/api/merma?pageSize=200")
+    fetchAPI("/api/shrinkage?pageSize=200")
       .then((raw) => { if (!cancelled) setRows((raw as { items: MermaRow[] }).items ?? []); })
       .catch((err) => { if (!cancelled) setError((err as Error).message); })
       .finally(() => { if (!cancelled) setLoading(false); });
@@ -179,7 +179,7 @@ export function Merma() {
   }, [reload]);
 
   const loadRazones = () => {
-    fetchAPI("/api/merma/razones")
+    fetchAPI("/api/shrinkage/reasons")
       .then((raw) => setRazones(raw as Razon[]))
       .catch(() => {/* non-fatal */});
   };
@@ -187,7 +187,7 @@ export function Merma() {
   const loadProductos = () => {
     if (productos.length > 0) return;
     setProductosLoading(true);
-    fetchAPI("/api/productos?pageSize=100000")
+    fetchAPI("/api/products?pageSize=100000")
       .then((raw) => {
         const items = (raw as { items: { id: number; sku: string; name: string }[] }).items ?? [];
         setProductos(items.map((p) => ({ sku: p.sku, name: p.name ?? "" })));
@@ -209,7 +209,7 @@ export function Merma() {
     if (!nuevaRazon.trim()) return;
     setRazonSaving(true);
     try {
-      const created = (await fetchAPI("/api/merma/razones", {
+      const created = (await fetchAPI("/api/shrinkage/reasons", {
         method: "POST",
         body: JSON.stringify({ nombre: nuevaRazon.trim() }),
       })) as Razon;
@@ -271,7 +271,7 @@ export function Merma() {
 
     setCreateLoading(true);
     try {
-      await fetchAPI("/api/merma", {
+      await fetchAPI("/api/shrinkage", {
         method: "POST",
         body: JSON.stringify({
           id_articulo, cantidad: cant, motivo,
@@ -295,7 +295,7 @@ export function Merma() {
     if (!deleteRow) return;
     setDeleteLoading(true);
     try {
-      await fetchAPI(`/api/merma/${deleteRow.id_merma}`, { method: "DELETE" });
+      await fetchAPI(`/api/shrinkage/${deleteRow.id_merma}`, { method: "DELETE" });
       setToast({ ok: true, text: "Merma eliminada y stock restaurado." });
       setDeleteRow(null);
       setReload((c) => c + 1);

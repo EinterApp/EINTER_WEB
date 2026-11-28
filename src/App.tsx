@@ -8,23 +8,23 @@ import { Sidebar } from './components/Sidebar'
 import { Navbar } from './components/NavBar'
 import { Login } from './pages/Login'
 import { Home } from './pages/Home'
-import { Productos } from './pages/Productos'
-import { Proveedores } from './pages/Proveedores'
-import { Ubicaciones } from './pages/Ubicaciones'
-import { Movimientos } from './pages/Movimientos'
-import { Salidas } from './pages/Salidas'
-import { VentasHomeDepot } from './pages/VentasHomeDepot'
-import { CostosVariables } from './pages/CostosVariables'
-import { InventarioInteligente } from './pages/InventarioInteligente'
-import { PedidoPersonalizado } from './pages/PedidoPersonalizado'
-import { THDComparativo } from './pages/THDComparativo'
-import { Categorias } from './pages/Categorias'
+import { Products } from './pages/Products'
+import { Suppliers } from './pages/Suppliers'
+import { Locations } from './pages/Locations'
+import { Movements } from './pages/Movements'
+import { Exits } from './pages/Exits'
+import { HomeDepotSales } from './pages/HomeDepotSales'
+import { VariableCosts } from './pages/VariableCosts'
+import { SmartInventory } from './pages/SmartInventory'
+import { CustomOrder } from './pages/CustomOrder'
+import { ThdComparison } from './pages/ThdComparison'
+import { Categories } from './pages/Categories'
 import Profile from './components/Profile'
 import { UserManagement } from './pages/UserManagement'
-import { Entradas } from './pages/Entradas'
-import { Merma } from './pages/Merma'
-import { Facturas } from './pages/Facturas'
-import { Bitacora } from './pages/Bitacora'
+import { Entries } from './pages/Entries'
+import { Shrinkage } from './pages/Shrinkage'
+import { Invoices } from './pages/Invoices'
+import { AuditLogs } from './pages/AuditLogs'
 import { RoleGuard } from './components/RoleGuard'
 
 const ACCESO_DENEGADO = (
@@ -45,43 +45,43 @@ function App() {
       case 'home':
         return <Home />
       case 'productos':
-        return <Productos />
+        return <Products />
       case 'proveedores':
-        return <Proveedores/>
+        return <Suppliers />
       case 'ubicaciones':
-        return <Ubicaciones/>
+        return <Locations />
       case 'movimientos':
-        return <Movimientos/>
+        return <Movements />
       case 'salidas':
-        return <Salidas/>
+        return <Exits />
       case 'ventas-homedepot':
-        return <VentasHomeDepot/>
+        return <HomeDepotSales />
       case 'costos-variables':
-        return <CostosVariables/>
+        return <VariableCosts />
       case 'inventario-inteligente':
-        return <InventarioInteligente />
+        return <SmartInventory />
       case 'pedido-personalizado':
-        return <PedidoPersonalizado />
+        return <CustomOrder />
       case 'thd-comparativo':
-        return <THDComparativo />
+        return <ThdComparison />
       case 'entradas':
-        return <Entradas />
+        return <Entries />
       case 'merma':
-        return <Merma />
+        return <Shrinkage />
       case 'facturas':
         return (
           <RoleGuard requireSuperAdmin={true} fallback={ACCESO_DENEGADO}>
-            <Facturas />
+            <Invoices />
           </RoleGuard>
         )
       case 'bitacora':
         return (
           <RoleGuard requireSuperAdmin={true} fallback={ACCESO_DENEGADO}>
-            <Bitacora />
+            <AuditLogs />
           </RoleGuard>
         )
       case 'categorias':
-        return <Categorias/>
+        return <Categories />
       case 'profile':
         return <Profile />
       case 'users':

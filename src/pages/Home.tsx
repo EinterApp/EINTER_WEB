@@ -4,7 +4,7 @@ import { useDarkMode } from "../context/DarkModeContext";
 import { api } from "../lib/api";
 import { useRefetchOnFocus } from "../hooks/useRefetchOnFocus";
 import { getMonterreyNow } from "../lib/dateMx";
-import { EtiquetaModal } from "../components/EtiquetaModal";
+import { ProductLabelModal } from "../components/ProductLabelModal";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -20,7 +20,7 @@ type TopProducto = { nombre: string; unidades: number };
 type ProductoAlerta = { nombre: string; diasCobertura: number; semaforo: "CRITICO" | "ALERTA" };
 type CatalogoProducto = { id: string; nombre: string; codigo: string };
 
-// Shape of GET /api/misc/dashboard and GET /api/productos (only the fields this page reads).
+// Shape of GET /api/dashboard and GET /api/products (only the fields this page reads).
 type DashboardResponse = {
   kpi: DashboardKpi;
   ventasSemanas: { semana_label?: string | null; semana_num: number; monto: number | string }[];
@@ -504,7 +504,7 @@ export function Home() {
         </div>
       </div>
 
-      <EtiquetaModal
+      <ProductLabelModal
         visible={etiquetaVisible}
         masterSkus={selectedForLabels.map((p) => p.codigo)}
         onClose={() => setEtiquetaVisible(false)}

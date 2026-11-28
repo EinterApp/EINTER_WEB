@@ -5,7 +5,7 @@ import { useDarkMode } from "../context/DarkModeContext";
 
 // Modal that renders a printable barcode label for a tarima (pallet), listing
 // the cartones it contains. Fetches its own cartones from GET
-// /api/tarimas/:id/cartones given just the tarima's id, so any caller that
+// /api/pallets/:id/cartons given just the tarima's id, so any caller that
 // already has a tarima row (from a search or from a real list) can use it
 // directly without pre-fetching anything itself.
 export interface TarimaRef {
@@ -26,7 +26,7 @@ interface TarimaEtiquetaModalProps {
   onClose: () => void;
 }
 
-export function TarimaEtiquetaModal({ visible, tarima, onClose }: TarimaEtiquetaModalProps) {
+export function PalletLabelModal({ visible, tarima, onClose }: TarimaEtiquetaModalProps) {
   useDarkMode();
   const svgRef = useRef<SVGSVGElement>(null);
   const [cartones, setCartones] = useState<CartonRow[]>([]);
@@ -38,7 +38,7 @@ export function TarimaEtiquetaModal({ visible, tarima, onClose }: TarimaEtiqueta
     setCartones([]);
     setError(null);
     setLoading(true);
-    fetchAPI(`/api/tarimas/${tarima.id_tarima}/cartones`)
+    fetchAPI(`/api/pallets/${tarima.id_tarima}/cartons`)
       .then((res: unknown) => {
         const data = res as { items?: CartonRow[] };
         setCartones(data.items ?? []);
