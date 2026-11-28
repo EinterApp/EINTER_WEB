@@ -60,6 +60,14 @@ Preview the production build locally:
 npm run preview
 ```
 
+### Test
+
+Run the standardization verification test suite:
+
+```bash
+npm test
+```
+
 ### Lint
 
 Run ESLint to check code quality:

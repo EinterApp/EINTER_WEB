@@ -66,7 +66,7 @@ Cuatro modales de impresión, todos con el mismo patrón (`jsbarcode` `CODE128` 
 
 Si agregas impresión de etiquetas en otra pantalla, reusa uno de estos cuatro patrones en vez de reimplementar `jsbarcode`/`window.print()` desde cero.
 
-## `src/pages/Ubicaciones.tsx` — mayormente mock, no lo confundas con datos reales
+## `src/pages/Locations.tsx` — mayormente mock, no lo confundas con datos reales
 
 Todo el árbol Ubicación→Master QR→Sub-QR de esta página usa `sampleData` hardcodeado en el propio archivo — no llama a ningún endpoint, no refleja la BD real. El único bloque real en esta página es `TarimaBarcodeSearch` (agregado 2026-08-10, arriba del header del árbol mock), que sí habla con el backend. Si vas a conectar el resto de la página a datos reales, probablemente quieras generalizar ese mismo patrón a islas/tarimas reales en vez de mantener `sampleData`.
 
@@ -84,9 +84,11 @@ Pase de cierre del proyecto: se borraron `src/components/VentaModal.tsx` (sin im
 
 - `EINTER_MOBILE` (Android) es un cliente separado del mismo backend. Un cambio de contrato en `EINTER_API` que afecte al móvil no se propaga solo — hay que mantener sincronizados `EINTER_MOBILE/app/src/main/java/com/einter/dev/movil/api/ApiService.kt` y sus pruebas (`EINTER_MOBILE/AGENTS.md`).
 
-## Estandarización de rutas REST a inglés — 2026-11-28
+## Estandarización de rutas REST y archivos a inglés — 2026-11-28
 - Todas las llamadas HTTP de `EINTER_WEB` se migraron a los endpoints REST en inglés de `EINTER_API`: `/api/products`, `/api/suppliers`, `/api/categories`, `/api/catalog/*`, `/api/dashboard`, `/api/locations`, `/api/islands`, `/api/pallets`, `/api/cartons`, `/api/warehouse/*`, `/api/containers`, `/api/movements`, `/api/history`, `/api/shrinkage`, `/api/thd/exits`, `/api/hd-sales`, `/api/invoices`, `/api/customer-invoices`, `/api/variable-costs`, `/api/replenishment` y `/api/audit-logs`.
-- Los componentes de etiquetas (`ProductLabelModal`, `ContainerLabelModal`, `PalletLabelModal`, `RowLabelModal`) generan `CODE128` verificado de extremo a extremo con el escáner universal de `EINTER_MOBILE`.
+- Páginas, componentes y docs estandarizados a inglés (`Products.tsx`, `Entries.tsx`, `Exits.tsx`, `Movements.tsx`, `Locations.tsx`, `Shrinkage.tsx`, `AuditLogs.tsx`, `Categories.tsx`, `CustomOrder.tsx`, `HomeDepotSales.tsx`, `Invoices.tsx`, `SmartInventory.tsx`, `Suppliers.tsx`, `ThdComparison.tsx`, `VariableCosts.tsx`; `ProductLabelModal.tsx`, `ContainerLabelModal.tsx`, `PalletLabelModal.tsx`, `RowLabelModal.tsx`, `SupplierModal.tsx`; `docs/ARCHITECTURE-C4.md`, `docs/HD-Orders-Comparison-Exits.md`).
+- Suite de verificación automatizada agregada (`npm test` → `node --test test/*.test.mjs`).
+- Los 4 componentes de etiquetas generan `CODE128` verificado de extremo a extremo con el escáner universal de `EINTER_MOBILE`.
 
 ## Movimientos ahora lee el historial unificado — 2026-11-01
 El módulo de Movimientos ya no usa `/api/catalogo/entradas` ni `/api/catalogo/salidas` (leían la tabla `movimientos`, que ya no recibe entradas/salidas nuevas). Lee `GET /api/history?pageSize=100000` (antes `/api/historial`, con contenedores, salidas THD, transferencias y merma) con columnas Fecha, Tipo, Documento, Referencia, SKU, Producto, Cantidad y Ubicación.
