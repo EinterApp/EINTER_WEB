@@ -2,11 +2,12 @@
 // the current navigation state.
 // Wraps the app shell (navbar, sidebar) once the user is authenticated.
 import { useState } from 'react'
-import { useAuth } from './context/AuthContext'
+import { AuthProvider, useAuth } from './context/AuthContext'
 import { DarkModeProvider } from './context/DarkModeContext'
 import { Sidebar } from './components/Sidebar'
 import { Navbar } from './components/NavBar'
 import { Login } from './pages/Login'
+import { Maintenance } from './pages/Maintenance'
 import { Home } from './pages/Home'
 import { Products } from './pages/Products'
 import { Suppliers } from './pages/Suppliers'
@@ -36,7 +37,11 @@ const ACCESO_DENEGADO = (
   </div>
 )
 
-function App() {
+// Temporary maintenance mode while production backend hosting (Railway) is restored.
+// Set VITE_MAINTENANCE_MODE=false (or change to false) once the API is back online.
+const MAINTENANCE_MODE = import.meta.env.VITE_MAINTENANCE_MODE !== 'false'
+
+function AuthenticatedApp() {
   const { user, loading } = useAuth()
   const [currentPage, setCurrentPage] = useState('home')
 
@@ -119,6 +124,18 @@ function App() {
         </div>
       </div>
     </DarkModeProvider>
+  )
+}
+
+function App() {
+  if (MAINTENANCE_MODE) {
+    return <Maintenance />
+  }
+
+  return (
+    <AuthProvider>
+      <AuthenticatedApp />
+    </AuthProvider>
   )
 }
 
