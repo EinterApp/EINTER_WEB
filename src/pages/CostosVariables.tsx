@@ -152,7 +152,7 @@ function NuevaSemanaModal({
     setError(null);
     try {
       for (const f of filas) {
-        await fetchAPI("/api/costos-variables", {
+        await fetchAPI("/api/variable-costs", {
           method: "POST",
           body: JSON.stringify({ anio, semana_num, semana_label, ...f }),
         });
@@ -247,7 +247,7 @@ function GraficaModal({ mod, nombre, onClose }: { mod: number; nombre: string; o
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchAPI(`/api/costos-variables/historial/${mod}`)
+    fetchAPI(`/api/variable-costs/history/${mod}`)
       .then((raw) => setPuntos(raw as HistorialPunto[]))
       .catch(() => setPuntos([]))
       .finally(() => setLoading(false));
@@ -329,7 +329,7 @@ export function CostosVariables() {
     setLoading(true);
     setError(null);
     try {
-      const data = await fetchAPI(`/api/costos-variables?anio=${a}`) as MatrizResponse;
+      const data = await fetchAPI(`/api/variable-costs?year=${a}`) as MatrizResponse;
       setMatriz(data);
     } catch (err) {
       setError((err as Error).message);

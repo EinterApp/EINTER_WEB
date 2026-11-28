@@ -513,7 +513,7 @@ export function VentasHomeDepot() {
     setLoading(true);
     setError(null);
     try {
-      const data = await fetchAPI(`/api/ventas-hd?anio=${a}`) as MatrizResponse;
+      const data = await fetchAPI(`/api/hd-sales?year=${a}`) as MatrizResponse;
       setMatriz(data);
     } catch (err) {
       setError((err as Error).message);
@@ -545,14 +545,14 @@ export function VentasHomeDepot() {
 
   const handleSaveEdit = async (celda: CeldaEditada) => {
     if (celda.id) {
-      await fetchAPI(`/api/ventas-hd/${celda.id}`, {
+      await fetchAPI(`/api/hd-sales/${celda.id}`, {
         method: "PUT",
         body: JSON.stringify({
           cantidad: celda.cantidad, precio: celda.precio, precioHD: celda.precioHD, importe: celda.importe,
         }),
       });
     } else {
-      await fetchAPI("/api/ventas-hd", {
+      await fetchAPI("/api/hd-sales", {
         method: "POST",
         body: JSON.stringify({
           anio: celda.anio,
@@ -580,7 +580,7 @@ export function VentasHomeDepot() {
     filas: FilaVenta[]
   ) => {
     for (const f of filas) {
-      await fetchAPI("/api/ventas-hd", {
+      await fetchAPI("/api/hd-sales", {
         method: "POST",
         body: JSON.stringify({ anio, semana_num, semana_label, ...f }),
       });
